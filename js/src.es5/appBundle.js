@@ -718,9 +718,9 @@ var appBundle = function () {
 
       this._thunderjs.on('Controller', 'statechange', this._onMessage.bind(this));
 
-      this._checkForInternet();
+      this._checkForIP();
 
-      setTimeout(this._noConnectionAfterTime, 10000);
+      setTimeout(this._noConnectionAfterTime.bind(this), 20000);
     }
 
     _createClass(WPE, [{
@@ -729,8 +729,8 @@ var appBundle = function () {
         if (this._state !== this.STATES.HASINTERNET) this._updateUIState('NoConnection');
       }
     }, {
-      key: "_checkForInternet",
-      value: function _checkForInternet() {
+      key: "_checkForIP",
+      value: function _checkForIP() {
         var _this = this;
 
         this._thunderjs.call('Controller', 'status@TimeSync').then(function (res) {
@@ -738,6 +738,23 @@ var appBundle = function () {
             _this._state = _this.STATES.HASIP;
 
             _this._initState();
+
+            _this._checkForInternet();
+          }
+        })["catch"](function (e) {
+          console.error('Error', e);
+        });
+      }
+    }, {
+      key: "_checkForInternet",
+      value: function _checkForInternet() {
+        var _this2 = this;
+
+        this._thunderjs.call('LocationSync', 'location').then(function (res) {
+          if (res.publicip !== undefined && res.publicip !== '') {
+            _this2._state = _this2.STATES.HASINTERNET;
+
+            _this2._initState();
           }
         })["catch"](function (e) {
           console.error('Error', e);
@@ -747,23 +764,20 @@ var appBundle = function () {
       key: "_onMessage",
       value: function _onMessage(notification) {
         if (!notification) return;
-        if (notification.callsign === 'LocationSync' && notification.state === 'Activated') this._state = this.STATES.HASIP;
-        if (notification.callsign === 'TimeSync' && notification.state === 'Activated') this._state = this.STATES.HASINTERNET;
 
-        this._initState();
+        if (notification.callsign === 'LocationSync' && notification.state === 'Activated') {
+          this._state = this.STATES.HASIP;
+
+          this._initState();
+        }
+
+        if (notification.callsign === 'TimeSync' && notification.state === 'Activated') setTimeout(this._checkForInternet.bind(this), 5000);
       }
     }, {
       key: "_initState",
       value: function _initState() {
-        var _this2 = this;
-
         if (this._state === this.STATES.NOIP) return;
-
-        if (this._state === this.STATES.HASIP) {
-          this._thunderjs.DeviceInfo.addresses().then(this._parseNetworks.bind(this))["catch"](function (err) {
-            _this2._updateUIState('NoConnection');
-          });
-        }
+        if (this._state === this.STATES.HASIP) this._getIPAddress();
 
         if (this._state === this.STATES.HASINTERNET) {
           this._getBootmanagerUrl().then(this._updateUIState.bind(this, 'GoToURL'))["catch"](function (err) {
@@ -785,11 +799,26 @@ var appBundle = function () {
         return this._xhr('GET', url);
       }
     }, {
+      key: "_getIPAddress",
+      value: function _getIPAddress() {
+        var _this3 = this;
+
+        this._thunderjs.DeviceInfo.addresses().then(this._parseNetworks.bind(this))["catch"](function (err) {
+          _this3._updateUIState('NoConnection');
+        });
+      }
+    }, {
       key: "_parseNetworks",
       value: function _parseNetworks(data) {
+        var ipList = data.filter(function (d) {
+          if (d.name === 'lo' || d.ip === undefined || d.ip.length < 1) return false;else return true;
+        }).map(function (d) {
+          return d.ip[0];
+        });
+
         for (var i in data) {
           if (data[i].name === 'eth0') {
-            this._updateUIState('HasLocalNetwork', data[i].ip[0]);
+            this._updateUIState('HasLocalNetwork', ipList.toString());
           }
         }
       }
@@ -838,7 +867,7 @@ var appBundle = function () {
     _createClass(App, [{
       key: "_init",
       value: function _init() {
-        var _this3 = this;
+        var _this4 = this;
 
         //this._wpe = new WPE('10.1.77.201', 80, this);
         this._wpe = new WPE('127.0.0.1', 80, this);
@@ -912,9 +941,9 @@ var appBundle = function () {
           }]
         });
         setTimeout(function () {
-          _this3.tag('Overlay').visible = false;
+          _this4.tag('Overlay').visible = false;
 
-          _this3.startAnimation();
+          _this4.startAnimation();
         }, 2000);
       }
     }, {
@@ -1018,8 +1047,8 @@ var appBundle = function () {
       value: function _states() {
         return [
         /*#__PURE__*/
-        function (_this4) {
-          _inherits(HasLocalNetwork, _this4);
+        function (_this5) {
+          _inherits(HasLocalNetwork, _this5);
 
           function HasLocalNetwork() {
             _classCallCheck(this, HasLocalNetwork);
@@ -1038,8 +1067,8 @@ var appBundle = function () {
           return HasLocalNetwork;
         }(this),
         /*#__PURE__*/
-        function (_this5) {
-          _inherits(GoToURL, _this5);
+        function (_this6) {
+          _inherits(GoToURL, _this6);
 
           function GoToURL() {
             _classCallCheck(this, GoToURL);
@@ -1050,7 +1079,7 @@ var appBundle = function () {
           _createClass(GoToURL, [{
             key: "$enter",
             value: function $enter(state, _ref2) {
-              var _this6 = this;
+              var _this7 = this;
 
               var data = _ref2.data;
 
@@ -1058,7 +1087,7 @@ var appBundle = function () {
                 this.goToUrl(data.url);
               } else {
                 this._globalAnimation.on('finish', function () {
-                  _this6.goToUrl(data.url);
+                  _this7.goToUrl(data.url);
                 });
               }
             }
@@ -1067,8 +1096,8 @@ var appBundle = function () {
           return GoToURL;
         }(this),
         /*#__PURE__*/
-        function (_this7) {
-          _inherits(NoConnection, _this7);
+        function (_this8) {
+          _inherits(NoConnection, _this8);
 
           function NoConnection() {
             _classCallCheck(this, NoConnection);

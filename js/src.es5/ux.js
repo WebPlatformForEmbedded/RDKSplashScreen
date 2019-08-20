@@ -35,6 +35,8 @@ function _setPrototypeOf(o, p) { _setPrototypeOf = Object.setPrototypeOf || func
 var ux = function () {
   'use strict';
 
+  var events = ['timeupdate', 'error', 'ended', 'loadeddata', 'canplay', 'play', 'playing', 'pause', 'loadstart', 'seeking', 'seeked', 'encrypted'];
+
   var Mediaplayer =
   /*#__PURE__*/
   function (_lng$Component) {
@@ -54,8 +56,6 @@ var ux = function () {
     }, {
       key: "_init",
       value: function _init() {
-        var _this = this;
-
         //re-use videotag if already there
         var videoEls = document.getElementsByTagName('video');
         if (videoEls && videoEls.length > 0) this.videoEl = videoEls[0];else {
@@ -74,15 +74,35 @@ var ux = function () {
           this._createVideoTexture();
         }
 
-        var events = ['timeupdate', 'error', 'ended', 'loadeddata', 'canplay', 'play', 'playing', 'pause', 'loadstart', 'seeking', 'seeked', 'encrypted'];
+        this.eventHandlers = [];
+      }
+    }, {
+      key: "_attach",
+      value: function _attach() {
+        var _this = this;
+
         events.forEach(function (event) {
-          _this.videoEl.addEventListener(event, function (e) {
+          var handler = function handler(e) {
             _this.fire(event, {
               videoElement: _this.videoEl,
               event: e
             });
-          });
+          };
+
+          _this.eventHandlers.push(handler);
+
+          _this.videoEl.addEventListener(event, handler);
         });
+      }
+    }, {
+      key: "_detach",
+      value: function _detach() {
+        var _this2 = this;
+
+        events.forEach(function (event, index) {
+          _this2.videoEl.removeEventListener(event, _this2.eventHandlers[index]);
+        });
+        this.eventHandlers = [];
       }
     }, {
       key: "_createVideoTexture",
@@ -104,52 +124,52 @@ var ux = function () {
     }, {
       key: "_startUpdatingVideoTexture",
       value: function _startUpdatingVideoTexture() {
-        var _this2 = this;
+        var _this3 = this;
 
         if (this.textureMode && !this._skipRenderToTexture) {
           var stage = this.stage;
 
           if (!this._updateVideoTexture) {
             this._updateVideoTexture = function () {
-              if (_this2.videoTexture.options.source && _this2.videoEl.videoWidth && _this2.active) {
+              if (_this3.videoTexture.options.source && _this3.videoEl.videoWidth && _this3.active) {
                 var gl = stage.gl;
                 var currentTime = new Date().getTime(); // When BR2_PACKAGE_GST1_PLUGINS_BAD_PLUGIN_DEBUGUTILS is not set in WPE, webkitDecodedFrameCount will not be available.
                 // We'll fallback to fixed 30fps in this case.
 
-                var frameCount = _this2.videoEl.webkitDecodedFrameCount;
-                var mustUpdate = frameCount ? _this2._lastFrame !== frameCount : _this2._lastTime < currentTime - 30;
+                var frameCount = _this3.videoEl.webkitDecodedFrameCount;
+                var mustUpdate = frameCount ? _this3._lastFrame !== frameCount : _this3._lastTime < currentTime - 30;
 
                 if (mustUpdate) {
-                  _this2._lastTime = currentTime;
-                  _this2._lastFrame = frameCount;
+                  _this3._lastTime = currentTime;
+                  _this3._lastFrame = frameCount;
 
                   try {
-                    gl.bindTexture(gl.TEXTURE_2D, _this2.videoTexture.options.source);
+                    gl.bindTexture(gl.TEXTURE_2D, _this3.videoTexture.options.source);
                     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, _this2.videoEl);
-                    _this2._lastFrame = _this2.videoEl.webkitDecodedFrameCount;
-                    _this2.videoTextureView.visible = true;
-                    _this2.videoTexture.options.w = _this2.videoEl.videoWidth;
-                    _this2.videoTexture.options.h = _this2.videoEl.videoHeight;
-                    var expectedAspectRatio = _this2.videoTextureView.w / _this2.videoTextureView.h;
-                    var realAspectRatio = _this2.videoEl.videoWidth / _this2.videoEl.videoHeight;
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, _this3.videoEl);
+                    _this3._lastFrame = _this3.videoEl.webkitDecodedFrameCount;
+                    _this3.videoTextureView.visible = true;
+                    _this3.videoTexture.options.w = _this3.videoEl.videoWidth;
+                    _this3.videoTexture.options.h = _this3.videoEl.videoHeight;
+                    var expectedAspectRatio = _this3.videoTextureView.w / _this3.videoTextureView.h;
+                    var realAspectRatio = _this3.videoEl.videoWidth / _this3.videoEl.videoHeight;
 
                     if (expectedAspectRatio > realAspectRatio) {
-                      _this2.videoTextureView.scaleX = realAspectRatio / expectedAspectRatio;
-                      _this2.videoTextureView.scaleY = 1;
+                      _this3.videoTextureView.scaleX = realAspectRatio / expectedAspectRatio;
+                      _this3.videoTextureView.scaleY = 1;
                     } else {
-                      _this2.videoTextureView.scaleY = expectedAspectRatio / realAspectRatio;
-                      _this2.videoTextureView.scaleX = 1;
+                      _this3.videoTextureView.scaleY = expectedAspectRatio / realAspectRatio;
+                      _this3.videoTextureView.scaleX = 1;
                     }
                   } catch (e) {
                     console.error('texImage2d video', e);
 
-                    _this2._stopUpdatingVideoTexture();
+                    _this3._stopUpdatingVideoTexture();
 
-                    _this2.videoTextureView.visible = false;
+                    _this3.videoTextureView.visible = false;
                   }
 
-                  _this2.videoTexture.source.forceRenderUpdate();
+                  _this3.videoTexture.source.forceRenderUpdate();
                 }
               }
             };
@@ -181,7 +201,7 @@ var ux = function () {
     }, {
       key: "updateSettings",
       value: function updateSettings() {
-        var _this3 = this;
+        var _this4 = this;
 
         var settings = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
         // The Component that 'consumes' the media player.
@@ -197,9 +217,9 @@ var ux = function () {
             navigator.requestMediaKeySystemAccess(settings.stream.keySystem.id, settings.stream.keySystem.config).then(function (keySystemAccess) {
               return keySystemAccess.createMediaKeys();
             }).then(function (createdMediaKeys) {
-              return _this3.videoEl.setMediaKeys(createdMediaKeys);
+              return _this4.videoEl.setMediaKeys(createdMediaKeys);
             }).then(function () {
-              if (settings.stream && settings.stream.src) _this3.open(settings.stream.src);
+              if (settings.stream && settings.stream.src) _this4.open(settings.stream.src);
             })["catch"](function () {
               console.error('Failed to set up MediaKeys');
             });
@@ -478,8 +498,8 @@ var ux = function () {
       value: function _states() {
         return [
         /*#__PURE__*/
-        function (_this4) {
-          _inherits(Playing, _this4);
+        function (_this5) {
+          _inherits(Playing, _this5);
 
           function Playing() {
             _classCallCheck(this, Playing);
@@ -531,8 +551,8 @@ var ux = function () {
             value: function _states() {
               return [
               /*#__PURE__*/
-              function (_this5) {
-                _inherits(Paused, _this5);
+              function (_this6) {
+                _inherits(Paused, _this6);
 
                 function Paused() {
                   _classCallCheck(this, Paused);
@@ -633,8 +653,8 @@ var ux = function () {
       value: function _states() {
         return [
         /*#__PURE__*/
-        function (_this6) {
-          _inherits(Playing, _this6);
+        function (_this7) {
+          _inherits(Playing, _this7);
 
           function Playing() {
             _classCallCheck(this, Playing);
@@ -647,8 +667,8 @@ var ux = function () {
             value: function _states() {
               return [
               /*#__PURE__*/
-              function (_this7) {
-                _inherits(Paused, _this7);
+              function (_this8) {
+                _inherits(Paused, _this8);
 
                 function Paused() {
                   _classCallCheck(this, Paused);
@@ -675,14 +695,14 @@ var ux = function () {
     _inherits(ScaledImageTexture, _lng$textures$ImageTe);
 
     function ScaledImageTexture(stage) {
-      var _this8;
+      var _this9;
 
       _classCallCheck(this, ScaledImageTexture);
 
-      _this8 = _possibleConstructorReturn(this, _getPrototypeOf(ScaledImageTexture).call(this, stage));
-      _this8._scalingOptions = undefined;
-      _this8.precision = 1;
-      return _this8;
+      _this9 = _possibleConstructorReturn(this, _getPrototypeOf(ScaledImageTexture).call(this, stage));
+      _this9._scalingOptions = undefined;
+      _this9.precision = 1;
+      return _this9;
     }
 
     _createClass(ScaledImageTexture, [{
@@ -825,14 +845,14 @@ var ux = function () {
     _inherits(Ui, _lng$Application);
 
     function Ui(options) {
-      var _this9;
+      var _this10;
 
       _classCallCheck(this, Ui);
 
       options.defaultFontFace = options.defaultFontFace || "RobotoRegular";
-      _this9 = _possibleConstructorReturn(this, _getPrototypeOf(Ui).call(this, options));
-      _this9._options = options;
-      return _this9;
+      _this10 = _possibleConstructorReturn(this, _getPrototypeOf(Ui).call(this, options));
+      _this10._options = options;
+      return _this10;
     }
 
     _createClass(Ui, [{
@@ -950,8 +970,8 @@ var ux = function () {
       value: function _states() {
         return [
         /*#__PURE__*/
-        function (_this10) {
-          _inherits(App, _this10);
+        function (_this11) {
+          _inherits(App, _this11);
 
           function App() {
             _classCallCheck(this, App);
@@ -969,8 +989,8 @@ var ux = function () {
             value: function _states() {
               return [
               /*#__PURE__*/
-              function (_this11) {
-                _inherits(Loading, _this11);
+              function (_this12) {
+                _inherits(Loading, _this12);
 
                 function Loading() {
                   _classCallCheck(this, Loading);
@@ -986,7 +1006,7 @@ var ux = function () {
                 }, {
                   key: "_startApp",
                   value: function _startApp(appClass) {
-                    var _this12 = this;
+                    var _this13 = this;
 
                     this._currentApp = {
                       type: appClass,
@@ -996,7 +1016,7 @@ var ux = function () {
                     var fonts = this._currentApp.type.getFonts();
 
                     Ui.loadFonts(fonts.concat(Ui.getFonts())).then(function (fontFaces) {
-                      _this12._currentApp.fontFaces = fontFaces;
+                      _this13._currentApp.fontFaces = fontFaces;
                     })["catch"](function (e) {
                       console.warn('Font loading issues: ' + e);
                     });
@@ -1013,8 +1033,8 @@ var ux = function () {
                 return Loading;
               }(this),
               /*#__PURE__*/
-              function (_this13) {
-                _inherits(Started, _this13);
+              function (_this14) {
+                _inherits(Started, _this14);
 
                 function Started() {
                   _classCallCheck(this, Started);
@@ -1226,8 +1246,8 @@ var ux = function () {
       value: function _states() {
         return [
         /*#__PURE__*/
-        function (_this14) {
-          _inherits(Selected, _this14);
+        function (_this15) {
+          _inherits(Selected, _this15);
 
           function Selected() {
             _classCallCheck(this, Selected);
@@ -1303,7 +1323,7 @@ var ux = function () {
     }, {
       key: "_setActiveButtons",
       value: function _setActiveButtons(buttons) {
-        var _this15 = this;
+        var _this16 = this;
 
         var o = this.constructor.options;
         var x = 0;
@@ -1313,7 +1333,7 @@ var ux = function () {
           button.x = x;
 
           if (button.active) {
-            _this15._activeButtons.push(button);
+            _this16._activeButtons.push(button);
           }
 
           x += button.renderWidth + o.margin;
@@ -1440,8 +1460,8 @@ var ux = function () {
       value: function _states() {
         return [
         /*#__PURE__*/
-        function (_this16) {
-          _inherits(Previous, _this16);
+        function (_this17) {
+          _inherits(Previous, _this17);
 
           function Previous() {
             _classCallCheck(this, Previous);
@@ -1452,8 +1472,8 @@ var ux = function () {
           return Previous;
         }(this),
         /*#__PURE__*/
-        function (_this17) {
-          _inherits(Play, _this17);
+        function (_this18) {
+          _inherits(Play, _this18);
 
           function Play() {
             _classCallCheck(this, Play);
@@ -1464,8 +1484,8 @@ var ux = function () {
           return Play;
         }(this),
         /*#__PURE__*/
-        function (_this18) {
-          _inherits(Next, _this18);
+        function (_this19) {
+          _inherits(Next, _this19);
 
           function Next() {
             _classCallCheck(this, Next);
@@ -1678,14 +1698,14 @@ var ux = function () {
     }, {
       key: "_setInterfaceTimeout",
       value: function _setInterfaceTimeout() {
-        var _this19 = this;
+        var _this20 = this;
 
         if (this._timeout) {
           clearTimeout(this._timeout);
         }
 
         this._timeout = setTimeout(function () {
-          _this19._hide();
+          _this20._hide();
         }, 8000);
       }
     }, {
@@ -1855,8 +1875,8 @@ var ux = function () {
       value: function _states() {
         return [
         /*#__PURE__*/
-        function (_this20) {
-          _inherits(Hidden, _this20);
+        function (_this21) {
+          _inherits(Hidden, _this21);
 
           function Hidden() {
             _classCallCheck(this, Hidden);
@@ -1888,8 +1908,8 @@ var ux = function () {
           return Hidden;
         }(this),
         /*#__PURE__*/
-        function (_this21) {
-          _inherits(Controls, _this21);
+        function (_this22) {
+          _inherits(Controls, _this22);
 
           function Controls() {
             _classCallCheck(this, Controls);
@@ -1928,13 +1948,13 @@ var ux = function () {
     _inherits(Light3dComponent, _lng$Component8);
 
     function Light3dComponent(stage) {
-      var _this22;
+      var _this23;
 
       _classCallCheck(this, Light3dComponent);
 
-      _this22 = _possibleConstructorReturn(this, _getPrototypeOf(Light3dComponent).call(this, stage));
+      _this23 = _possibleConstructorReturn(this, _getPrototypeOf(Light3dComponent).call(this, stage));
 
-      _this22.patch({
+      _this23.patch({
         __create: true,
         Main: {
           x: -1,
@@ -1953,28 +1973,28 @@ var ux = function () {
         }
       });
 
-      _this22._shaderZ = 0;
-      _this22._shaderZ0 = 0;
-      _this22._shaderZ1 = 0;
-      _this22._shaderRx = 0;
-      _this22._shaderRx0 = 0;
-      _this22._shaderRx1 = 0;
-      _this22._shaderRy = 0;
-      _this22._shaderRy0 = 0;
-      _this22._shaderRy1 = 0;
-      _this22._focusedZ = -150;
+      _this23._shaderZ = 0;
+      _this23._shaderZ0 = 0;
+      _this23._shaderZ1 = 0;
+      _this23._shaderRx = 0;
+      _this23._shaderRx0 = 0;
+      _this23._shaderRx1 = 0;
+      _this23._shaderRy = 0;
+      _this23._shaderRy0 = 0;
+      _this23._shaderRy1 = 0;
+      _this23._focusedZ = -150;
 
-      _this22._createAnimations();
+      _this23._createAnimations();
 
-      _this22.transition('lightShader.strength', {
+      _this23.transition('lightShader.strength', {
         duration: 0.2
       });
 
-      _this22.transition('lightShader.ambient', {
+      _this23.transition('lightShader.ambient', {
         duration: 0.2
       });
 
-      return _this22;
+      return _this23;
     }
 
     _createClass(Light3dComponent, [{
@@ -2622,7 +2642,7 @@ var ux = function () {
     }, {
       key: "_update",
       value: function _update() {
-        var _this23 = this;
+        var _this24 = this;
 
         if (this._layout && this.keyboardTemplate.layouts[this._layout] === undefined) {
           console.error("Configured layout \"".concat(this.layout, "\" does not exist. Reverting to \"").concat(Object.keys(this.keyboardTemplate.layouts)[0], "\""));
@@ -2674,7 +2694,7 @@ var ux = function () {
                 x: prevOffset,
                 w: w,
                 h: h,
-                type: _this23.keyboardButton
+                type: _this24.keyboardButton
               };
             })
           };
@@ -3415,8 +3435,8 @@ var ux = function () {
       value: function _states() {
         return [
         /*#__PURE__*/
-        function (_this24) {
-          _inherits(Empty, _this24);
+        function (_this25) {
+          _inherits(Empty, _this25);
 
           function Empty() {
             _classCallCheck(this, Empty);
@@ -3427,8 +3447,8 @@ var ux = function () {
           return Empty;
         }(this),
         /*#__PURE__*/
-        function (_this25) {
-          _inherits(Filled, _this25);
+        function (_this26) {
+          _inherits(Filled, _this26);
 
           function Filled() {
             _classCallCheck(this, Filled);
@@ -3609,7 +3629,7 @@ var ux = function () {
     }, {
       key: "_init",
       value: function _init() {
-        var _this26 = this;
+        var _this27 = this;
 
         var wrapper = this.tag('Wrapper');
         var or = this.orientation === 'horizontal' ? 'x' : 'y';
@@ -3617,10 +3637,10 @@ var ux = function () {
         this._scrollTransition = wrapper.transition(or);
 
         wrapper.onAfterUpdate = function () {
-          if (_this26.orientation === 'horizontal') {
-            _this26._fullSize = wrapper.finalW;
+          if (_this27.orientation === 'horizontal') {
+            _this27._fullSize = wrapper.finalW;
           } else {
-            _this26._fullSize = wrapper.finalH;
+            _this27._fullSize = wrapper.finalH;
           }
         };
 
@@ -3757,8 +3777,8 @@ var ux = function () {
       value: function _states() {
         return [
         /*#__PURE__*/
-        function (_this27) {
-          _inherits(Empty, _this27);
+        function (_this28) {
+          _inherits(Empty, _this28);
 
           function Empty() {
             _classCallCheck(this, Empty);
@@ -3769,8 +3789,8 @@ var ux = function () {
           return Empty;
         }(this),
         /*#__PURE__*/
-        function (_this28) {
-          _inherits(Filled, _this28);
+        function (_this29) {
+          _inherits(Filled, _this29);
 
           function Filled() {
             _classCallCheck(this, Filled);

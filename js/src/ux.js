@@ -1,6 +1,8 @@
 var ux = (function () {
     'use strict';
 
+    const events = ['timeupdate', 'error', 'ended', 'loadeddata', 'canplay', 'play', 'playing', 'pause', 'loadstart', 'seeking', 'seeked', 'encrypted'];
+
     class Mediaplayer extends lng.Component {
 
         _construct(){
@@ -58,12 +60,24 @@ var ux = (function () {
                 this._createVideoTexture();
             }
 
-            const events = ['timeupdate', 'error', 'ended', 'loadeddata', 'canplay', 'play', 'playing', 'pause', 'loadstart', 'seeking', 'seeked', 'encrypted'];
+            this.eventHandlers = [];
+        }
+
+        _attach() {
             events.forEach(event => {
-                this.videoEl.addEventListener(event, (e) => {
+                const handler = (e) => {
                     this.fire(event, {videoElement: this.videoEl, event: e});
-                });
+                };
+                this.eventHandlers.push(handler);
+                this.videoEl.addEventListener(event, handler);
             });
+        }
+
+        _detach() {
+            events.forEach((event, index) => {
+                this.videoEl.removeEventListener(event, this.eventHandlers[index]);
+            });
+            this.eventHandlers = [];
         }
 
         _createVideoTexture() {
