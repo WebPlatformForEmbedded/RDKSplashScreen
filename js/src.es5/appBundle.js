@@ -1,5 +1,11 @@
 "use strict";
 
+function ownKeys(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); if (enumerableOnly) symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; }); keys.push.apply(keys, symbols); } return keys; }
+
+function _objectSpread(target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i] != null ? arguments[i] : {}; if (i % 2) { ownKeys(source, true).forEach(function (key) { _defineProperty(target, key, source[key]); }); } else if (Object.getOwnPropertyDescriptors) { Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)); } else { ownKeys(source).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } } return target; }
+
+function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
+
 function _typeof(obj) { if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -456,6 +462,251 @@ var appBundle = function () {
     return Message;
   }(lng.Component);
 
+  var WifiItem =
+  /*#__PURE__*/
+  function (_lng$Component4) {
+    _inherits(WifiItem, _lng$Component4);
+
+    function WifiItem() {
+      _classCallCheck(this, WifiItem);
+
+      return _possibleConstructorReturn(this, _getPrototypeOf(WifiItem).apply(this, arguments));
+    }
+
+    _createClass(WifiItem, [{
+      key: "_focus",
+      value: function _focus() {
+        this.color = 0xFF377FAC;
+      }
+    }, {
+      key: "_unfocus",
+      value: function _unfocus() {
+        this.color = 0xFF0E2B3D;
+      }
+    }, {
+      key: "_handleEnter",
+      value: function _handleEnter() {
+        this.fireAncestors('$onWifiItemSelect', {
+          item: this.item
+        });
+      }
+    }, {
+      key: "item",
+      set: function set(v) {
+        this._item = v;
+        this.patch({
+          WifiStrenghtIcon: {
+            src: App.getPath(WifiItem.getIconWifiStrength(v.strength))
+          },
+          WifiProtectedIcon: {
+            src: App.getPath(WifiItem.getIconWifiProtected(v["protected"]))
+          },
+          Label: {
+            text: {
+              text: v.name || 'Unknown'
+            }
+          }
+        });
+      },
+      get: function get() {
+        return this._item;
+      }
+    }, {
+      key: "introAnimation",
+      set: function set(delay) {
+        var _this = this;
+
+        this.showAnimation = this.animation({
+          duration: 1,
+          delay: delay,
+          stopMethod: 'immediate',
+          actions: [{
+            p: 'x',
+            v: {
+              0: 800,
+              1: 0
+            }
+          }]
+        });
+        setTimeout(function () {
+          _this.showAnimation.start();
+        }, 1000);
+      }
+    }], [{
+      key: "_template",
+      value: function _template() {
+        return {
+          x: 800,
+          w: 800,
+          h: 80,
+          rect: true,
+          color: 0xFF0E2B3D,
+          WifiStrenghtIcon: {
+            w: 50,
+            h: 50,
+            x: 25,
+            y: 15,
+            src: App.getPath('images/icons/icon_wifi.png')
+          },
+          WifiProtectedIcon: {
+            w: 25,
+            h: 25,
+            x: 60,
+            y: 45
+          },
+          Label: {
+            x: 100,
+            mountY: 0.4,
+            y: 40,
+            text: {
+              text: 'Unknown',
+              fontSize: 32,
+              maxLines: 1,
+              wordWrapWidth: 650
+            }
+          }
+        };
+      }
+    }, {
+      key: "getIconWifiStrength",
+      value: function getIconWifiStrength(v) {
+        switch (true) {
+          case v >= 0 && v < 20:
+            return 'images/icons/icon_wifi_01.png';
+
+          case v >= 20 && v < 40:
+            return 'images/icons/icon_wifi_02.png';
+
+          case v >= 40 && v < 60:
+            return 'images/icons/icon_wifi_03.png';
+
+          case v >= 60 && v < 80:
+            return 'images/icons/icon_wifi_04.png';
+
+          case v >= 80 && v <= 100:
+            return 'images/icons/icon_wifi_05.png';
+
+          default:
+            return 'images/icons/icon_wifi.png';
+        }
+      }
+    }, {
+      key: "getIconWifiProtected",
+      value: function getIconWifiProtected(wifiProtected) {
+        if (wifiProtected) {
+          return 'images/icons/icon_wifi_protected_true.png';
+        } else {
+          return 'images/icons/icon_wifi_protected_false.png';
+        }
+      }
+    }]);
+
+    return WifiItem;
+  }(lng.Component);
+
+  var WifiList =
+  /*#__PURE__*/
+  function (_lng$Component5) {
+    _inherits(WifiList, _lng$Component5);
+
+    function WifiList() {
+      _classCallCheck(this, WifiList);
+
+      return _possibleConstructorReturn(this, _getPrototypeOf(WifiList).apply(this, arguments));
+    }
+
+    _createClass(WifiList, [{
+      key: "open",
+      value: function open() {}
+    }, {
+      key: "close",
+      value: function close() {}
+    }, {
+      key: "_init",
+      value: function _init() {
+        this._index = 0;
+        this.gridY = 0;
+      }
+    }, {
+      key: "moveList",
+      value: function moveList(dir) {
+        if (dir === 'up') {
+          this.gridY -= 510;
+        } else if (dir === 'down') {
+          this.gridY += 510;
+        }
+
+        this.tag('WifiList').patch({
+          smooth: {
+            y: this.gridY
+          }
+        });
+      }
+    }, {
+      key: "_handleUp",
+      value: function _handleUp() {
+        if (this.index > 0) {
+          this.index--;
+
+          if (this.index % 6 === 5 && this.index !== 0) {
+            this.moveList('down');
+          }
+        }
+      }
+    }, {
+      key: "_handleDown",
+      value: function _handleDown() {
+        var listEnd = this.tag('WifiList').children.length - 1;
+
+        if (this.index < listEnd) {
+          this.index++;
+
+          if (this.index % 6 === 0 && this.index <= listEnd) {
+            this.moveList('up');
+          }
+        }
+      }
+    }, {
+      key: "_getFocused",
+      value: function _getFocused() {
+        return this.tag('WifiList').children[this.index];
+      }
+    }, {
+      key: "index",
+      set: function set(v) {
+        this._index = v;
+      },
+      get: function get() {
+        return this._index;
+      }
+    }, {
+      key: "items",
+      set: function set(v) {
+        if (!(v && Array.isArray(v) && v.length)) return;
+        this.tag('WifiList').children = v.map(function (item, idx) {
+          return {
+            type: WifiItem,
+            introAnimation: idx * 0.2,
+            item: item,
+            y: idx * 85
+          };
+        });
+      }
+    }], [{
+      key: "_template",
+      value: function _template() {
+        return {
+          w: 800,
+          h: 510,
+          clipping: true,
+          WifiList: {}
+        };
+      }
+    }]);
+
+    return WifiList;
+  }(lng.Component);
+
   var ThunderJS = function () {
     function l(e) {
       return (l = "function" == typeof Symbol && "symbol" == _typeof(Symbol.iterator) ? function (e) {
@@ -485,22 +736,24 @@ var appBundle = function () {
     function f(t) {
       return new Promise(function (e, n) {
         if (i) e(i);else try {
-          c || ((c = new r("ws://" + t.host + "/jsonrpc", "notification")).addEventListener("message", function (e) {
+          c || ((c = new r(function (e) {
+            return [e && e.protocol || "ws://", e && e.host || "localhost", ":" + (e && e.port || 80), e && e.endpoint || "/jsonrpc"].join("");
+          }(t), "notification")).addEventListener("message", function (e) {
             !function (e) {
-              if (e.id) {
+              if ("string" == typeof e && (e = JSON.parse(e.normalize().replace(/\\x([0-9A-Fa-f]{2})/g, ""))), e.id) {
                 var n = a[e.id];
                 n ? ("result" in e ? n.resolve(e.result) : n.reject(e.error), delete a[e.id]) : console.log("no pending request found with id " + e.id);
               }
-            }(JSON.parse(e.data));
+            }(e.data);
           }), c.addEventListener("message", function (e) {
             !function (n) {
-              if (!n.id && n.method) {
+              if ("string" == typeof n && (n = JSON.parse(n.normalize().replace(/\\x([0-9A-Fa-f]{2})/g, ""))), !n.id && n.method) {
                 var e = u[n.method];
                 e && Array.isArray(e) && e.length ? e.forEach(function (e) {
                   e(n.params);
                 }) : console.log("no callbacks for " + n.method);
               }
-            }(JSON.parse(e.data));
+            }(e.data);
           })), c.addEventListener("open", function () {
             e(i = c);
           });
@@ -567,7 +820,7 @@ var appBundle = function () {
     function d(n, t, e) {
       var o = this,
           r = function (e, n, t) {
-        var o = h(e, n);
+        var o = y(e, n);
 
         if (!u[o]) {
           u[o] = [];
@@ -585,9 +838,9 @@ var appBundle = function () {
 
       return {
         dispose: function dispose() {
-          var e = h(n, t);
+          var e = y(n, t);
           u[e].splice(r, 1), 0 === u[e].length && function (e, n) {
-            var t = h(e, n);
+            var t = y(e, n);
             delete u[t];
             var o = "unregister",
                 r = t.split(".").slice(0, -1).join("."),
@@ -601,12 +854,12 @@ var appBundle = function () {
       };
     }
 
-    function h(e, n) {
+    function y(e, n) {
       return ["client", e, "events", n].join(".");
     }
 
-    var y,
-        b = function t(e) {
+    var h,
+        g = function t(e) {
       return {
         options: e,
         plugin: !1,
@@ -618,7 +871,7 @@ var appBundle = function () {
           return "function" == typeof this[n][t] ? this[n][t](e[2]) : this.api.request.apply(this, e);
         },
         registerPlugin: function registerPlugin(e, n) {
-          this[e] = g(Object.assign(Object.create(t), n, {
+          this[e] = b(Object.assign(Object.create(t), n, {
             plugin: e
           }));
         },
@@ -632,11 +885,11 @@ var appBundle = function () {
         }
       };
     },
-        g = function e(n) {
+        b = function e(n) {
       return new Proxy(n, {
         get: function get(o, r) {
           var i = o[r];
-          return "api" === r ? y : void 0 !== i ? "function" == typeof i ? -1 < ["on", "once", "subscribe"].indexOf(r) ? function () {
+          return "api" === r ? h : void 0 !== i ? "function" == typeof i ? -1 < ["on", "once", "subscribe"].indexOf(r) ? function () {
             for (var e = arguments.length, n = new Array(e), t = 0; t < e; t++) {
               n[t] = arguments[t];
             }
@@ -659,9 +912,9 @@ var appBundle = function () {
                 return n(e);
               });
             }(i.apply(this, n), n);
-          } : "object" === l(i) ? e(Object.assign(Object.create(b(o.options)), i, {
+          } : "object" === l(i) ? e(Object.assign(Object.create(g(o.options)), i, {
             plugin: r
-          })) : i : !1 === o.plugin ? e(Object.assign(Object.create(b(o.options)), {}, {
+          })) : i : !1 === o.plugin ? e(Object.assign(Object.create(g(o.options)), {}, {
             plugin: r
           })) : function () {
             for (var e = arguments.length, n = new Array(e), t = 0; t < e; t++) {
@@ -675,7 +928,7 @@ var appBundle = function () {
     };
 
     return function (e) {
-      return y = o(e), g(function (r) {
+      return h = o(e), b(function (r) {
         for (var e = 1; e < arguments.length; e++) {
           var i = null != arguments[e] ? arguments[e] : {};
           e % 2 ? n(i, !0).forEach(function (e) {
@@ -692,9 +945,99 @@ var appBundle = function () {
         }
 
         return r;
-      }({}, b(e), {}, s));
+      }({}, g(e), {}, s));
     };
   }();
+
+  var Wifi =
+  /*#__PURE__*/
+  function () {
+    function Wifi(config) {
+      _classCallCheck(this, Wifi);
+
+      this._thunderjs = new ThunderJS(config);
+    }
+
+    _createClass(Wifi, [{
+      key: "networks",
+      value: function networks() {
+        var _this2 = this;
+
+        return new Promise(function (resolve, reject) {
+          var _getWifiNetworks = function _getWifiNetworks() {
+            _this2._thunderjs.call('WifiControl', 'networks').then(function (data) {
+              if (data === undefined || data.length === undefined || data.length === 0) return;
+              _this2._networks = data;
+              var networks = data.filter(function (n) {
+                if (n.ssid && n.ssid !== '') return true;else return false;
+              }).map(function (n) {
+                // the version I have has something weird with the signal strength, lets work around it, looks like an long int rollover of 4294967295
+                if (n.signal > 4294967000) n.signal = 4294967295 - n.signal; // signal is measured in -dBm, which ranges from -30 dBm is 100% to -90dBm is 0%. However the value returned is positive
+
+                var signal = 0;
+                if (n.signal < 40) signal = 100;else if (n.signal < 50 && n.signal > 40) signal = 90;else if (n.signal < 60 && n.signal > 50) signal = 75;else if (n.signal < 70 && n.signal > 60) signal = 50;else if (n.signal > 80 && n.signal < 70) signal = 25;else signal = 0;
+                return {
+                  name: n.ssid,
+                  strength: signal,
+                  "protected": n.pairs[0].method === 'ESS' ? false : true
+                };
+              });
+              if (_this2._wifiControlScanListener) _this2._wifiControlScanListener.dispose();
+              console.log("Got ".concat(networks.length, " networks"));
+              resolve(networks);
+            });
+          };
+
+          _this2._wifiControlScanListener = _this2._thunderjs.on('WifiControl', 'scanresults', function (data) {
+            _getWifiNetworks();
+          });
+
+          _this2._thunderjs.call('WifiControl', 'scan');
+
+          setTimeout(_getWifiNetworks.bind(_this2), 2000);
+        });
+      }
+    }, {
+      key: "connect",
+      value: function connect(ssid, password) {
+        var _this3 = this;
+
+        return new Promise(function (resolve, reject) {
+          console.log("Connecting to ".concat(ssid));
+
+          var network = _this3._networks.filter(function (n) {
+            if (n.ssid === ssid) return true;
+          })[0];
+
+          var type;
+          if (network.pairs[0].method === 'WPA2' || network.pairs[0].method === 'WPA') type = 'WPA';else if (network.pairs[0].method === 'WEP') type = 'Unknown';else if (network.pairs[0].method === 'ESS') type = 'Unsecure';else type = 'Unkown';
+          if (_this3._wifiConnectionListener) _this3._wifiControlScanListener.dispose(_this3._wifiConnectionListener);
+          return _this3._thunderjs.call('WifiControl', "config@".concat(ssid), {
+            ssid: ssid,
+            accesspoint: false,
+            psk: password,
+            type: type
+          }).then(function () {
+            _this3._wifiConnectionListener = _this3._thunderjs.on('WifiControl', 'connectionchange', function () {
+              console.log("Succesfully connected to wifi, getting IP");
+
+              _this3._thunderjs.call('NetworkControl', 'request', {
+                device: 'wlan0'
+              });
+            });
+
+            _this3._thunderjs.call('WifiControl', 'connect', {
+              ssid: ssid
+            });
+          });
+        });
+      }
+    }]);
+
+    return Wifi;
+  }();
+
+  var CONNECTION_TIMEOUT = 15000;
 
   var WPE =
   /*#__PURE__*/
@@ -706,6 +1049,7 @@ var appBundle = function () {
         host: host,
         port: port
       };
+      this._wifi = new Wifi(config);
       this._stage = stage;
       this._baseBootmanagerUrl = 'http://bootmanager.metrological.com/rdk/landingpage';
       this.STATES = {
@@ -717,29 +1061,85 @@ var appBundle = function () {
       this._thunderjs = new ThunderJS(config);
 
       this._thunderjs.on('Controller', 'statechange', this._onMessage.bind(this));
-
-      this._checkForIP();
-
-      setTimeout(this._noConnectionAfterTime.bind(this), 20000);
     }
 
     _createClass(WPE, [{
+      key: "connectWifi",
+      value: function connectWifi(ssid, passwd) {
+        var _this4 = this;
+
+        this._updateUIState('ConnectingToNetwork', ssid);
+
+        this._wifi.connect(ssid, passwd).then(function () {
+          setTimeout(_this4._noConnectionAfterTime.bind(_this4), CONNECTION_TIMEOUT);
+
+          _this4._checkForIP();
+        });
+      }
+    }, {
+      key: "init",
+      value: function init() {
+        var _this5 = this;
+
+        console.log('init');
+        this._uxPlugin = undefined;
+        this._wifiPlugin = undefined;
+        this._state = this.STATES.NOIP; // check if we have a wifi or ux plugin
+
+        this._thunderjs.call('Controller', 'status').then(function (_plugins) {
+          for (var i = 0; i < _plugins.length; i++) {
+            var _p = _plugins[i];
+
+            if (_p.callsign === 'UX') {
+              console.log('Found UX plugin');
+              _this5._uxPlugin = _p;
+            }
+
+            if (_p.callsign === 'WifiControl') {
+              console.log('Found WifiControl plugin');
+              _this5._wifiPlugin = _p;
+            }
+          }
+        });
+
+        this._checkForIP();
+
+        setTimeout(this._noConnectionAfterTime.bind(this), CONNECTION_TIMEOUT);
+      }
+    }, {
       key: "_noConnectionAfterTime",
       value: function _noConnectionAfterTime() {
-        if (this._state !== this.STATES.HASINTERNET) this._updateUIState('NoConnection');
+        var _this6 = this;
+
+        console.log('_noConnectionAfterTime');
+
+        if (this._state !== this.STATES.HASINTERNET) {
+          if (this._wifiPlugin === undefined) {
+            this._updateUIState('NoConnection');
+          } else {
+            this._updateUIState('ScanningForNetworks');
+
+            this._wifi.networks().then(function (networks) {
+              _this6._updateUIState('WifiLocations', networks);
+            });
+          }
+        }
       }
     }, {
       key: "_checkForIP",
       value: function _checkForIP() {
-        var _this = this;
+        var _this7 = this;
+
+        console.log('_checkForIP');
 
         this._thunderjs.call('Controller', 'status@TimeSync').then(function (res) {
           if (res && Array.isArray(res) && res[0] && res[0].state === "activated") {
-            _this._state = _this.STATES.HASIP;
+            _this7._state = _this7.STATES.HASIP;
+            console.log('_checkForIP HASIP');
 
-            _this._initState();
+            _this7._initState();
 
-            _this._checkForInternet();
+            _this7._checkForInternet();
           }
         })["catch"](function (e) {
           console.error('Error', e);
@@ -748,13 +1148,16 @@ var appBundle = function () {
     }, {
       key: "_checkForInternet",
       value: function _checkForInternet() {
-        var _this2 = this;
+        var _this8 = this;
+
+        console.log('_checkForInternet');
 
         this._thunderjs.call('LocationSync', 'location').then(function (res) {
           if (res.publicip !== undefined && res.publicip !== '') {
-            _this2._state = _this2.STATES.HASINTERNET;
+            _this8._state = _this8.STATES.HASINTERNET;
+            console.log('_checkForInternet HASINTERNET');
 
-            _this2._initState();
+            _this8._initState();
           }
         })["catch"](function (e) {
           console.error('Error', e);
@@ -764,23 +1167,24 @@ var appBundle = function () {
       key: "_onMessage",
       value: function _onMessage(notification) {
         if (!notification) return;
-
-        if (notification.callsign === 'LocationSync' && notification.state === 'Activated') {
-          this._state = this.STATES.HASIP;
-
-          this._initState();
-        }
-
+        if (notification.callsign === 'LocationSync' && notification.state === 'Activated') this._checkForIP();
         if (notification.callsign === 'TimeSync' && notification.state === 'Activated') setTimeout(this._checkForInternet.bind(this), 5000);
+        if (notification.callsign === 'NetworkControl') this._checkForIP();
       }
     }, {
       key: "_initState",
       value: function _initState() {
+        var _this9 = this;
+
+        console.log('_initState state:', this._state);
         if (this._state === this.STATES.NOIP) return;
-        if (this._state === this.STATES.HASIP) this._getIPAddress();
+        if (this._state >= this.STATES.HASIP) this._getIPAddress();
 
         if (this._state === this.STATES.HASINTERNET) {
-          this._getBootmanagerUrl().then(this._updateUIState.bind(this, 'GoToURL'))["catch"](function (err) {
+          this._getBootmanagerUrl().then(function (data) {
+            if (_this9._uxPlugin === undefined) // we dont seem to have a ux plugin, redirect the current window instead
+              _this9._updateUIState('GoToURL', data);else _this9._launchUx(data.url);
+          })["catch"](function (err) {
             console.error(err);
           });
         }
@@ -788,6 +1192,8 @@ var appBundle = function () {
     }, {
       key: "_updateUIState",
       value: function _updateUIState(state, data) {
+        console.log('_updateUIState', state, data);
+
         this._stage._setState(state, [{
           data: data
         }]);
@@ -799,17 +1205,53 @@ var appBundle = function () {
         return this._xhr('GET', url);
       }
     }, {
+      key: "_launchUx",
+      value: function _launchUx(url) {
+        var _this10 = this;
+
+        //using all for now, individual states on UX through thunderjs didnt seem to work
+        console.log('_launchUx', url);
+
+        this._thunderjs.on('Controller', 'all', function (data) {
+          if (data.callsign !== 'UX') return;
+
+          var _data = data.data ? data.data : {};
+
+          if (_data.state === 'activated') _this10._thunderjs.call('UX', 'state', 'resumed');
+          if (_data.suspended === false) _this10._thunderjs.call('UX', 'url', url);
+          if (_data.url === url && _data.loaded) setTimeout(_this10._harakiri.bind(_this10), 5000);
+        });
+
+        if (this._uxPlugin.state === 'deactivated') this._thunderjs.call('Controller', 'activate', {
+          'callsign': 'UX'
+        });else if (this._uxPlugin.state === 'suspended') this._thunderjs.call('UX', 'state', 'resumed');else if (this._uxPlugin.state === 'resumed') this._thunderjs.call('UX', 'url').then(function (_url) {
+          if (_url === url) _this10._harakiri();else _this10._thunderjs.call('UX', 'url', url);
+        });
+      }
+    }, {
+      key: "_harakiri",
+      value: function _harakiri() {
+        console.log('_harakiri');
+
+        this._thunderjs.call('Controller', 'deactivate', {
+          'callsign': 'WebKitBrowser'
+        });
+      }
+    }, {
       key: "_getIPAddress",
       value: function _getIPAddress() {
-        var _this3 = this;
+        var _this11 = this;
+
+        console.log('_getIPAddress');
 
         this._thunderjs.DeviceInfo.addresses().then(this._parseNetworks.bind(this))["catch"](function (err) {
-          _this3._updateUIState('NoConnection');
+          _this11._updateUIState('NoConnection');
         });
       }
     }, {
       key: "_parseNetworks",
       value: function _parseNetworks(data) {
+        console.log('_parseNetworks', data);
         var ipList = data.filter(function (d) {
           if (d.name === 'lo' || d.ip === undefined || d.ip.length < 1) return false;else return true;
         }).map(function (d) {
@@ -817,7 +1259,7 @@ var appBundle = function () {
         });
 
         for (var i in data) {
-          if (data[i].name === 'eth0') {
+          if (data[i].name === 'eth0' || data[i].name === 'wlan0') {
             this._updateUIState('HasLocalNetwork', ipList.toString());
           }
         }
@@ -853,6 +1295,1034 @@ var appBundle = function () {
     return WPE;
   }();
 
+  var template = {
+    keyWidth: 50,
+    keyHeight: 70,
+    horizontalSpacing: 25,
+    verticalSpacing: 20,
+    layouts: {
+      'abc': {
+        rows: [{
+          keys: [{
+            c: 'a'
+          }, {
+            c: 'b'
+          }, {
+            c: 'c'
+          }, {
+            c: 'd'
+          }, {
+            c: 'e'
+          }, {
+            c: 'f'
+          }, {
+            c: 'g'
+          }, {
+            c: 'h'
+          }, {
+            c: 'i'
+          }, {
+            c: 'j'
+          }, {
+            c: 'k'
+          }, {
+            c: 'l'
+          }, {
+            action: 'backspace',
+            w: 125,
+            source: 'images/icons/icon_backspace.png'
+          }]
+        }, {
+          keys: [{
+            c: 'm'
+          }, {
+            c: 'n'
+          }, {
+            c: 'o'
+          }, {
+            c: 'p'
+          }, {
+            c: 'q'
+          }, {
+            c: 'r'
+          }, {
+            c: 's'
+          }, {
+            c: 't'
+          }, {
+            c: 'u'
+          }, {
+            c: 'v'
+          }, {
+            c: 'w'
+          }, {
+            c: 'x'
+          }, {
+            c: 'y'
+          }, {
+            c: 'z'
+          }]
+        }, {
+          keys: [{
+            c: '.'
+          }, {
+            c: '_'
+          }, {
+            c: '-'
+          }, {
+            c: '@'
+          }, {
+            c: '0'
+          }, {
+            c: '1'
+          }, {
+            c: '2'
+          }, {
+            c: '3'
+          }, {
+            c: '4'
+          }, {
+            c: '5'
+          }, {
+            c: '6'
+          }, {
+            c: '7'
+          }, {
+            c: '8'
+          }, {
+            c: '9'
+          }]
+        }, {
+          keys: [{
+            c: ','
+          }, {
+            action: 'space',
+            c: 'space',
+            w: 650
+          }, {
+            action: 'toggleToLayout',
+            toLayout: '#123',
+            c: '!#',
+            w: 125
+          }, {
+            action: 'toggleToLayout',
+            toLayout: 'ABC',
+            c: 'ABC',
+            w: 125
+          }]
+        } // {
+        // 	keys: [
+        // 		{action: '.com', c: '.com', w: 125},
+        // 		{action: '@gmail.com', c: '@gmail.com', w: 275},
+        // 		{action: '@hotmail.com', c: '@hotmail.com', w: 275},
+        // 		{action: '@yahoo.com', c: '@yahoo.com', w: 275}
+        // 	]
+        // }
+        ]
+      },
+      'ABC': {
+        rows: [{
+          keys: [{
+            c: 'A'
+          }, {
+            c: 'B'
+          }, {
+            c: 'C'
+          }, {
+            c: 'D'
+          }, {
+            c: 'E'
+          }, {
+            c: 'F'
+          }, {
+            c: 'G'
+          }, {
+            c: 'H'
+          }, {
+            c: 'I'
+          }, {
+            c: 'J'
+          }, {
+            c: 'K'
+          }, {
+            c: 'L'
+          }, {
+            action: 'backspace',
+            w: 125,
+            source: 'images/icons/icon_backspace.png'
+          }]
+        }, {
+          keys: [{
+            c: 'M'
+          }, {
+            c: 'N'
+          }, {
+            c: 'O'
+          }, {
+            c: 'P'
+          }, {
+            c: 'Q'
+          }, {
+            c: 'R'
+          }, {
+            c: 'S'
+          }, {
+            c: 'T'
+          }, {
+            c: 'U'
+          }, {
+            c: 'V'
+          }, {
+            c: 'W'
+          }, {
+            c: 'X'
+          }, {
+            c: 'Y'
+          }, {
+            c: 'Z'
+          }]
+        }, {
+          keys: [{
+            c: '.'
+          }, {
+            c: '_'
+          }, {
+            c: '-'
+          }, {
+            c: '@'
+          }, {
+            c: '0'
+          }, {
+            c: '1'
+          }, {
+            c: '2'
+          }, {
+            c: '3'
+          }, {
+            c: '4'
+          }, {
+            c: '5'
+          }, {
+            c: '6'
+          }, {
+            c: '7'
+          }, {
+            c: '8'
+          }, {
+            c: '9'
+          }]
+        }, {
+          keys: [{
+            c: ','
+          }, {
+            action: 'space',
+            c: 'space',
+            w: 650
+          }, {
+            action: 'toggleToLayout',
+            toLayout: '#123',
+            c: '!#',
+            w: 125
+          }, {
+            action: 'toggleToLayout',
+            toLayout: 'abc',
+            c: 'abc',
+            w: 125
+          }]
+        } // {
+        // 	keys: [
+        // 		{action: '.com', c: '.com', w: 125},
+        // 		{action: '@gmail.com', c: '@gmail.com', w: 275},
+        // 		{action: '@hotmail.com', c: '@hotmail.com', w: 275},
+        // 		{action: '@yahoo.com', c: '@yahoo.com', w: 275}
+        // 	]
+        // }
+        ]
+      },
+      '#123': {
+        rows: [{
+          keys: [{
+            c: '!'
+          }, {
+            c: '@'
+          }, {
+            c: '#'
+          }, {
+            c: '$'
+          }, {
+            c: '%'
+          }, {
+            c: '^'
+          }, {
+            c: '&'
+          }, {
+            c: '*'
+          }, {
+            c: '('
+          }, {
+            c: ')'
+          }, {
+            c: '`'
+          }, {
+            c: '~'
+          }, {
+            action: 'backspace',
+            w: 125,
+            source: 'images/icons/icon_backspace.png'
+          }]
+        }, {
+          keys: [{
+            c: '¡'
+          }, {
+            c: '¿'
+          }, {
+            c: '∞'
+          }, {
+            c: '['
+          }, {
+            c: ']'
+          }, {
+            c: '{'
+          }, {
+            c: '}'
+          }, {
+            c: '\\'
+          }, {
+            c: '|'
+          }, {
+            c: '-'
+          }, {
+            c: '_'
+          }, {
+            c: '='
+          }, {
+            c: '+'
+          }, {
+            c: ';'
+          }]
+        }, {
+          keys: [{
+            c: ':'
+          }, {
+            c: '•'
+          }, {
+            c: '\"'
+          }, {
+            c: '\''
+          }, {
+            c: '<'
+          }, {
+            c: '>'
+          }, {
+            c: '.'
+          }, {
+            c: ','
+          }, {
+            c: '/'
+          }, {
+            c: '?'
+          }]
+        }, {
+          keys: [{
+            c: ''
+          }, {
+            action: 'space',
+            c: 'space',
+            w: 650
+          }, {
+            action: 'toggleToLayout',
+            toLayout: 'abc',
+            c: 'abc',
+            w: 125
+          }, {
+            action: 'toggleToLayout',
+            toLayout: 'ABC',
+            c: 'ABC',
+            w: 125
+          }]
+        } // {
+        // 	keys: [
+        // 		{action: '.com', c: '.com', w: 125},
+        // 		{action: '@gmail.com', c: '@gmail.com', w: 275},
+        // 		{action: '@hotmail.com', c: '@hotmail.com', w: 275},
+        // 		{action: '@yahoo.com', c: '@yahoo.com', w: 275}
+        // 	]
+        // }
+        ]
+      }
+    }
+  };
+
+  var KeyboardButton =
+  /*#__PURE__*/
+  function (_lng$Component6) {
+    _inherits(KeyboardButton, _lng$Component6);
+
+    function KeyboardButton() {
+      _classCallCheck(this, KeyboardButton);
+
+      return _possibleConstructorReturn(this, _getPrototypeOf(KeyboardButton).apply(this, arguments));
+    }
+
+    _createClass(KeyboardButton, [{
+      key: "_update",
+      value: function _update() {
+        var key = this._key;
+        var content = this._key.source ? {
+          w: 39,
+          h: 26,
+          y: 30,
+          src: this._key.source ? App.getPath(this._key.source) : ''
+        } : {
+          text: {
+            text: key.c || '',
+            fontFace: 'RobotoRegular',
+            textAlign: 'center',
+            fontSize: 36
+          }
+        };
+        this.patch({
+          UnderLine: {
+            alpha: this.action !== 'input' ? 1 : 0,
+            w: this.w,
+            y: this.h - 3
+          },
+          Background: {
+            w: this.w,
+            h: this.h,
+            rect: true,
+            color: 0xFF0E2B3D
+          },
+          Content: _objectSpread({
+            w: this.w,
+            h: this.h,
+            mountX: 0.5,
+            mountY: 0.4,
+            x: this.w / 2,
+            y: this.h / 2
+          }, content)
+        });
+      }
+    }, {
+      key: "_focus",
+      value: function _focus() {
+        this.patch({
+          Background: {
+            color: 0xFF377FAC
+          }
+        });
+      }
+    }, {
+      key: "_unfocus",
+      value: function _unfocus() {
+        this.patch({
+          Background: {
+            color: 0xFF0E2B3D
+          }
+        });
+      }
+    }, {
+      key: "_firstActive",
+      value: function _firstActive() {
+        this._update();
+      }
+    }, {
+      key: "action",
+      set: function set(v) {
+        this._action = v;
+      },
+      get: function get() {
+        return this._action;
+      }
+    }, {
+      key: "c",
+      get: function get() {
+        return this.key.c;
+      }
+    }, {
+      key: "key",
+      set: function set(v) {
+        this._key = v;
+
+        if (this.active) {
+          this._update();
+        }
+      },
+      get: function get() {
+        return this._key;
+      }
+    }], [{
+      key: "_template",
+      value: function _template() {
+        return {
+          UnderLine: {
+            x: 0,
+            y: 0,
+            w: 0,
+            h: 3,
+            rect: true,
+            color: 0xFF444444,
+            alpha: 0
+          },
+          Background: {
+            rect: true,
+            color: 0xFF0E2B3D
+          },
+          Content: {}
+        };
+      }
+    }]);
+
+    return KeyboardButton;
+  }(lng.Component);
+
+  var Keyboard =
+  /*#__PURE__*/
+  function (_lng$Component7) {
+    _inherits(Keyboard, _lng$Component7);
+
+    function Keyboard() {
+      _classCallCheck(this, Keyboard);
+
+      return _possibleConstructorReturn(this, _getPrototypeOf(Keyboard).apply(this, arguments));
+    }
+
+    _createClass(Keyboard, [{
+      key: "_getFocused",
+      value: function _getFocused() {
+        return this.currentKey;
+      }
+    }, {
+      key: "_navigate",
+      value: function _navigate(dir, value) {
+        dir = dir === 'up' || dir === 'down' ? 'vertical' : 'horizontal';
+
+        if (dir === 'horizontal' && this.colIndex + value < this.rowLength && this.colIndex + value > -1) {
+          this.previous = null;
+          return this.colIndex += value;
+        } else if (dir === 'vertical' && this.rowIndex + value < this.rows.length && this.rowIndex + value > -1) {
+          var currentColIndex = this.colIndex;
+          var targetRow = this.rowIndex + value;
+
+          if (this.previous && this.previous.row === targetRow) {
+            var tmp = this.previous.col;
+            this.previous.col = this.colIndex;
+            this.colIndex = tmp;
+          } else {
+            var _targetRow = this.children[this.rowIndex + value];
+            var targetItems = _targetRow.children;
+            var ck = this.currentKey;
+            var target = 0;
+
+            for (var i = 0; i < targetItems.length; i++) {
+              var ckx = this.children[this.rowIndex].x + ck.x;
+              var tix = _targetRow.x + targetItems[i].x;
+
+              if (ckx >= tix && ckx <= tix + targetItems[i].w || tix >= ckx && tix <= ckx + ck.w) {
+                target = i;
+                break;
+              }
+            }
+
+            this.colIndex = target;
+          }
+
+          this.previous = {
+            col: currentColIndex,
+            row: this.rowIndex
+          };
+          return this.rowIndex += value;
+        }
+
+        return false;
+      }
+    }, {
+      key: "_update",
+      value: function _update() {
+        var _this12 = this;
+
+        if (this._layout && this.keyboardTemplate.layouts[this._layout] === undefined) {
+          console.error("Configured layout \"".concat(this.layout, "\" does not exist. Reverting to \"").concat(Object.keys(this.keyboardTemplate.layouts)[0], "\""));
+          this._layout = null;
+        }
+
+        if (!this._layout) {
+          this._layout = Object.keys(this.keyboardTemplate.layouts)[0];
+        }
+
+        var _this$keyboardTemplat = this.keyboardTemplate,
+            keyWidth = _this$keyboardTemplat.keyWidth,
+            keyHeight = _this$keyboardTemplat.keyHeight,
+            _this$keyboardTemplat2 = _this$keyboardTemplat.horizontalSpacing,
+            horizontalSpacing = _this$keyboardTemplat2 === void 0 ? 0 : _this$keyboardTemplat2,
+            _this$keyboardTemplat3 = _this$keyboardTemplat.verticalSpacing,
+            verticalSpacing = _this$keyboardTemplat3 === void 0 ? 0 : _this$keyboardTemplat3,
+            layouts = _this$keyboardTemplat.layouts;
+        this.children = layouts[this._layout].rows.map(function (row, rowIndex) {
+          var keyOffset = 0;
+          var _row$x = row.x,
+              x = _row$x === void 0 ? 0 : _row$x,
+              _row$rowVerticalSpaci = row.rowVerticalSpacing,
+              rowVerticalSpacing = _row$rowVerticalSpaci === void 0 ? verticalSpacing : _row$rowVerticalSpaci,
+              _row$rowHorizontalSpa = row.rowHorizontalSpacing,
+              rowHorizontalSpacing = _row$rowHorizontalSpa === void 0 ? horizontalSpacing : _row$rowHorizontalSpa,
+              _row$keys = row.keys,
+              keys = _row$keys === void 0 ? [] : _row$keys;
+          return {
+            y: keyHeight * rowIndex + rowIndex * rowVerticalSpacing,
+            x: x,
+            children: keys.map(function (key) {
+              key = Object.assign({
+                action: 'input'
+              }, key);
+              var prevOffset = keyOffset;
+              var _key = key,
+                  _key$w = _key.w,
+                  w = _key$w === void 0 ? keyWidth : _key$w,
+                  _key$h = _key.h,
+                  h = _key$h === void 0 ? keyHeight : _key$h,
+                  action = _key.action,
+                  toLayout = _key.toLayout;
+              keyOffset += w + rowHorizontalSpacing;
+              return {
+                key: key,
+                action: action,
+                toLayout: toLayout,
+                x: prevOffset,
+                w: w,
+                h: h,
+                type: _this12.keyboardButton
+              };
+            })
+          };
+        });
+      }
+    }, {
+      key: "reset",
+      value: function reset() {
+        this.colIndex = 0;
+        this.rowIndex = 0;
+        this._value = '';
+        this.previous = null;
+      }
+    }, {
+      key: "_init",
+      value: function _init() {
+        this.reset();
+
+        this._update();
+      }
+    }, {
+      key: "_handleRight",
+      value: function _handleRight() {
+        return this._navigate('right', 1);
+      }
+    }, {
+      key: "_handleLeft",
+      value: function _handleLeft() {
+        return this._navigate('left', -1);
+      }
+    }, {
+      key: "_handleUp",
+      value: function _handleUp() {
+        return this._navigate('up', -1);
+      }
+    }, {
+      key: "_handleDown",
+      value: function _handleDown() {
+        if (this.rowIndex >= 3) {
+          this.signal('onKeyboardExitDown');
+        } else {
+          return this._navigate('down', 1);
+        }
+      }
+    }, {
+      key: "_handleEnter",
+      value: function _handleEnter() {
+        var key = this.currentKey;
+
+        switch (key.action) {
+          case 'input':
+            this.value += key.c;
+            break;
+
+          case '.com':
+          case '@gmail.com':
+          case '@hotmail.com':
+          case '@yahoo.com':
+            this.value += key.c;
+            break;
+
+          case 'backspace':
+            this.value = this.value.slice(0, -1);
+            break;
+
+          case 'space':
+            if (this.value.length > 0) {
+              this.value += ' ';
+            }
+
+            break;
+
+          case 'delete':
+            this.value = '';
+            break;
+
+          case 'toggleToLayout':
+            this.layout = key.toLayout;
+            break;
+
+          default:
+            this.signal(key.action);
+        }
+
+        this.signal('onKeyboardInputUpdate', this.value);
+      }
+    }, {
+      key: "keyboardTemplate",
+      get: function get() {
+        return template;
+      }
+    }, {
+      key: "keyboardButton",
+      get: function get() {
+        return KeyboardButton;
+      }
+    }, {
+      key: "maxCharacters",
+      get: function get() {
+        return 40;
+      }
+    }, {
+      key: "value",
+      set: function set(v) {
+        if (v.length < this.maxCharacters) {
+          this._value = v;
+          this.signal('valueChanged', {
+            value: v
+          });
+        }
+      },
+      get: function get() {
+        return this._value;
+      }
+    }, {
+      key: "rows",
+      get: function get() {
+        return this.children;
+      }
+    }, {
+      key: "rowLength",
+      get: function get() {
+        return this.rows[this.rowIndex].children.length;
+      }
+    }, {
+      key: "currentKey",
+      get: function get() {
+        return this.children[this.rowIndex].children[this.colIndex];
+      }
+    }, {
+      key: "layout",
+      set: function set(layout) {
+        this._layout = layout;
+
+        this._update();
+      },
+      get: function get() {
+        return this._layout;
+      }
+    }], [{
+      key: "_template",
+      value: function _template() {
+        return {};
+      }
+    }]);
+
+    return Keyboard;
+  }(lng.Component);
+
+  var LoginButton =
+  /*#__PURE__*/
+  function (_lng$Component8) {
+    _inherits(LoginButton, _lng$Component8);
+
+    function LoginButton() {
+      _classCallCheck(this, LoginButton);
+
+      return _possibleConstructorReturn(this, _getPrototypeOf(LoginButton).apply(this, arguments));
+    }
+
+    _createClass(LoginButton, [{
+      key: "_focus",
+      value: function _focus() {
+        this.patch({
+          color: 0xFF377FAC
+        });
+      }
+    }, {
+      key: "_unfocus",
+      value: function _unfocus() {
+        this.patch({
+          color: 0xFF0E2B3D
+        });
+      }
+    }], [{
+      key: "_template",
+      value: function _template() {
+        return {
+          w: 1025,
+          h: 70,
+          rect: true,
+          color: 0xFF0E2B3D,
+          Label: {
+            x: 512,
+            y: 35,
+            mountX: 0.5,
+            mountY: 0.4,
+            color: 0xFFF1F1F1,
+            text: {
+              text: 'LOGIN',
+              fontSize: 32
+            }
+          }
+        };
+      }
+    }]);
+
+    return LoginButton;
+  }(lng.Component); // import App from '../App.js';
+
+
+  var WifiLogin =
+  /*#__PURE__*/
+  function (_lng$Component9) {
+    _inherits(WifiLogin, _lng$Component9);
+
+    function WifiLogin() {
+      _classCallCheck(this, WifiLogin);
+
+      return _possibleConstructorReturn(this, _getPrototypeOf(WifiLogin).apply(this, arguments));
+    }
+
+    _createClass(WifiLogin, [{
+      key: "_init",
+      value: function _init() {
+        this.passwordLabel = '';
+
+        this._setState('LoginKeyboard');
+
+        this.showAnimation = this.animation({
+          duration: 0.4,
+          delay: 0,
+          stopMethod: 'immediate',
+          actions: [{
+            p: 'w',
+            v: {
+              0: 0,
+              1: 1100
+            }
+          }, {
+            p: 'h',
+            v: {
+              0: 0,
+              1: 640
+            }
+          }, {
+            p: 'alpha',
+            v: {
+              0: 0,
+              1: 1
+            }
+          }]
+        });
+        this.hideAnimation = this.animation({
+          duration: 0.4,
+          delay: 0,
+          stopMethod: 'immediate',
+          actions: [{
+            p: 'w',
+            v: {
+              0: 1100,
+              1: 0
+            }
+          }, {
+            p: 'h',
+            v: {
+              0: 640,
+              1: 0
+            }
+          }, {
+            p: 'alpha',
+            v: {
+              0: 1,
+              1: 0
+            }
+          }]
+        });
+      }
+    }, {
+      key: "showLogin",
+      value: function showLogin() {
+        var _this13 = this;
+
+        if (this.wifiName) this.tag('InputLabel').text.text = "WIFI Login:  ".concat(this.wifiName);
+        this.tag('LoginKeyboard').value = '';
+        this.passwordLabel = '';
+        this.hideAnimation.stop();
+        this.showAnimation.start();
+        this.showAnimation.on('finish', function () {
+          _this13._setState('LoginKeyboard');
+        });
+      }
+    }, {
+      key: "hideLogin",
+      value: function hideLogin() {
+        this.tag('InputLabel').text.text = "WIFI Login:";
+        this.showAnimation.stop();
+        this.hideAnimation.start();
+      }
+    }, {
+      key: "passwordLabel",
+      set: function set(v) {
+        this.tag('PasswordText').text.text = v && v.length ? ' • '.repeat(v.length) : 'Please enter your password...';
+      }
+    }], [{
+      key: "_template",
+      value: function _template() {
+        return {
+          w: 0,
+          h: 0,
+          mount: 0.5,
+          alpha: 0.0001,
+          rect: true,
+          color: 0xFF193643,
+          clipping: true,
+          InputLabel: {
+            x: 40,
+            y: 30,
+            color: 0xFFF1F1F1,
+            text: {
+              text: 'WIFI Login:',
+              fontSize: 32
+            }
+          },
+          Input: {
+            w: 1025,
+            h: 60,
+            x: 40,
+            y: 90,
+            rect: true,
+            color: 0xFF3A6269,
+            PasswordText: {
+              x: 20,
+              mountY: 0.4,
+              y: 30,
+              color: 0xFFF1F1F1,
+              text: {
+                text: '',
+                fontSize: 32
+              }
+            }
+          },
+          LoginKeyboard: {
+            x: 40,
+            y: 170,
+            type: Keyboard,
+            layout: 'abc',
+            signals: {
+              onKeyboardExitDown: true,
+              onKeyboardInputUpdate: true
+            }
+          },
+          LoginButton: {
+            x: 40,
+            y: 540,
+            type: LoginButton
+          }
+        };
+      }
+    }, {
+      key: "_states",
+      value: function _states() {
+        return [
+        /*#__PURE__*/
+        function (_this14) {
+          _inherits(LoginKeyboard, _this14);
+
+          function LoginKeyboard() {
+            _classCallCheck(this, LoginKeyboard);
+
+            return _possibleConstructorReturn(this, _getPrototypeOf(LoginKeyboard).apply(this, arguments));
+          }
+
+          _createClass(LoginKeyboard, [{
+            key: "$enter",
+            value: function $enter() {
+              console.log('$enter Keyboard :');
+            }
+          }, {
+            key: "$exit",
+            value: function $exit() {
+              console.log('$exit Keyboard :');
+            }
+          }, {
+            key: "onKeyboardExitDown",
+            value: function onKeyboardExitDown() {
+              this._setState('LoginButton');
+            }
+          }, {
+            key: "onKeyboardInputUpdate",
+            value: function onKeyboardInputUpdate(v) {
+              this.passwordLabel = v;
+            }
+          }, {
+            key: "_getFocused",
+            value: function _getFocused() {
+              return this.tag('LoginKeyboard');
+            }
+          }]);
+
+          return LoginKeyboard;
+        }(this),
+        /*#__PURE__*/
+        function (_this15) {
+          _inherits(LoginButton$$1, _this15);
+
+          function LoginButton$$1() {
+            _classCallCheck(this, LoginButton$$1);
+
+            return _possibleConstructorReturn(this, _getPrototypeOf(LoginButton$$1).apply(this, arguments));
+          }
+
+          _createClass(LoginButton$$1, [{
+            key: "_handleEnter",
+            value: function _handleEnter() {
+              this.fireAncestors('$onLogin', {
+                name: this.wifiName,
+                password: this.tag('LoginKeyboard').value
+              });
+              this.fire('$exit');
+            }
+          }, {
+            key: "_handleUp",
+            value: function _handleUp() {
+              this._setState('LoginKeyboard');
+            }
+          }, {
+            key: "_getFocused",
+            value: function _getFocused() {
+              return this.tag('LoginButton');
+            }
+          }]);
+
+          return LoginButton$$1;
+        }(this)];
+      }
+    }]);
+
+    return WifiLogin;
+  }(lng.Component);
+
   var App =
   /*#__PURE__*/
   function (_ux$App) {
@@ -867,9 +2337,9 @@ var appBundle = function () {
     _createClass(App, [{
       key: "_init",
       value: function _init() {
-        var _this4 = this;
+        var _this16 = this;
 
-        //this._wpe = new WPE('10.1.77.201', 80, this);
+        //this._wpe = new WPE('192.168.11.101', 80, this);
         this._wpe = new WPE('127.0.0.1', 80, this);
         this._globalAnimation = this.animation({
           duration: 7,
@@ -941,10 +2411,16 @@ var appBundle = function () {
           }]
         });
         setTimeout(function () {
-          _this4.tag('Overlay').visible = false;
+          _this16.tag('Overlay').visible = false;
 
-          _this4.startAnimation();
+          _this16.startAnimation();
         }, 2000);
+        setTimeout(function () {
+          _this16._wpe.init();
+        }, 2500);
+        setTimeout(function () {
+          if (_this16.tag('Message').message === undefined) _this16.tag('Message').message = 'Please wait...';
+        }, 7000);
       }
     }, {
       key: "startAnimation",
@@ -966,6 +2442,17 @@ var appBundle = function () {
       key: "goToUrl",
       value: function goToUrl(url) {
         window.location.href = url;
+      }
+    }, {
+      key: "$onLogin",
+      value: function $onLogin(_ref) {
+        var _ref$name = _ref.name,
+            name = _ref$name === void 0 ? '' : _ref$name,
+            _ref$password = _ref.password,
+            password = _ref$password === void 0 ? '' : _ref$password;
+        console.log('$onLogin :', name, password);
+
+        this._wpe.connectWifi(name, password);
       }
     }, {
       key: "ipAddress",
@@ -1034,6 +2521,18 @@ var appBundle = function () {
             y: 60,
             type: Message
           },
+          WifiList: {
+            x: 100,
+            y: 100,
+            type: WifiList,
+            visible: false
+          },
+          WifiLoginScreen: {
+            x: 960,
+            y: 540,
+            mount: 0.5,
+            type: WifiLogin
+          },
           Overlay: {
             w: 1920,
             h: 1080,
@@ -1047,8 +2546,8 @@ var appBundle = function () {
       value: function _states() {
         return [
         /*#__PURE__*/
-        function (_this5) {
-          _inherits(HasLocalNetwork, _this5);
+        function (_this17) {
+          _inherits(HasLocalNetwork, _this17);
 
           function HasLocalNetwork() {
             _classCallCheck(this, HasLocalNetwork);
@@ -1058,8 +2557,8 @@ var appBundle = function () {
 
           _createClass(HasLocalNetwork, [{
             key: "$enter",
-            value: function $enter(state, _ref) {
-              var data = _ref.data;
+            value: function $enter(state, _ref2) {
+              var data = _ref2.data;
               this.tag('Message').message = "Connected; IP: ".concat(data);
             }
           }]);
@@ -1067,8 +2566,67 @@ var appBundle = function () {
           return HasLocalNetwork;
         }(this),
         /*#__PURE__*/
-        function (_this6) {
-          _inherits(GoToURL, _this6);
+        function (_this18) {
+          _inherits(HasLocalNetwork, _this18);
+
+          function HasLocalNetwork() {
+            _classCallCheck(this, HasLocalNetwork);
+
+            return _possibleConstructorReturn(this, _getPrototypeOf(HasLocalNetwork).apply(this, arguments));
+          }
+
+          _createClass(HasLocalNetwork, [{
+            key: "$enter",
+            value: function $enter(state, _ref3) {
+              var data = _ref3.data;
+              this.tag('Message').message = "Connected; IP: ".concat(data);
+            }
+          }]);
+
+          return HasLocalNetwork;
+        }(this),
+        /*#__PURE__*/
+        function (_this19) {
+          _inherits(ConnectingToNetwork, _this19);
+
+          function ConnectingToNetwork() {
+            _classCallCheck(this, ConnectingToNetwork);
+
+            return _possibleConstructorReturn(this, _getPrototypeOf(ConnectingToNetwork).apply(this, arguments));
+          }
+
+          _createClass(ConnectingToNetwork, [{
+            key: "$enter",
+            value: function $enter(state, _ref4) {
+              var data = _ref4.data;
+              this.tag('Message').message = "Connecting to: ".concat(data);
+            }
+          }]);
+
+          return ConnectingToNetwork;
+        }(this),
+        /*#__PURE__*/
+        function (_this20) {
+          _inherits(ScanningForNetworks, _this20);
+
+          function ScanningForNetworks() {
+            _classCallCheck(this, ScanningForNetworks);
+
+            return _possibleConstructorReturn(this, _getPrototypeOf(ScanningForNetworks).apply(this, arguments));
+          }
+
+          _createClass(ScanningForNetworks, [{
+            key: "$enter",
+            value: function $enter(state) {
+              this.tag('Message').message = "Scanning for networks...";
+            }
+          }]);
+
+          return ScanningForNetworks;
+        }(this),
+        /*#__PURE__*/
+        function (_this21) {
+          _inherits(GoToURL, _this21);
 
           function GoToURL() {
             _classCallCheck(this, GoToURL);
@@ -1078,16 +2636,16 @@ var appBundle = function () {
 
           _createClass(GoToURL, [{
             key: "$enter",
-            value: function $enter(state, _ref2) {
-              var _this7 = this;
+            value: function $enter(state, _ref5) {
+              var _this22 = this;
 
-              var data = _ref2.data;
+              var data = _ref5.data;
 
               if (this._globalAnimation.state === 4) {
                 this.goToUrl(data.url);
               } else {
                 this._globalAnimation.on('finish', function () {
-                  _this7.goToUrl(data.url);
+                  _this22.goToUrl(data.url);
                 });
               }
             }
@@ -1096,8 +2654,8 @@ var appBundle = function () {
           return GoToURL;
         }(this),
         /*#__PURE__*/
-        function (_this8) {
-          _inherits(NoConnection, _this8);
+        function (_this23) {
+          _inherits(NoConnection, _this23);
 
           function NoConnection() {
             _classCallCheck(this, NoConnection);
@@ -1109,10 +2667,133 @@ var appBundle = function () {
             key: "$enter",
             value: function $enter() {
               this.tag('Message').message = 'No valid internet connection';
+
+              this._setState('WifiLocations');
             }
           }]);
 
           return NoConnection;
+        }(this),
+        /*#__PURE__*/
+        function (_this24) {
+          _inherits(WifiLocations, _this24);
+
+          function WifiLocations() {
+            _classCallCheck(this, WifiLocations);
+
+            return _possibleConstructorReturn(this, _getPrototypeOf(WifiLocations).apply(this, arguments));
+          }
+
+          _createClass(WifiLocations, [{
+            key: "$enter",
+            value: function $enter(state, _ref6) {
+              var data = _ref6.data;
+              this.tag('WifiList').items = data;
+              this.tag('WifiList').visible = true;
+
+              this._setState('WifiLocations.LoadLocations');
+            }
+          }, {
+            key: "$exit",
+            value: function $exit() {
+              this.tag('WifiList').visible = false;
+            }
+          }], [{
+            key: "_states",
+            value: function _states() {
+              return [
+              /*#__PURE__*/
+              function (_this25) {
+                _inherits(LoadLocations, _this25);
+
+                function LoadLocations() {
+                  _classCallCheck(this, LoadLocations);
+
+                  return _possibleConstructorReturn(this, _getPrototypeOf(LoadLocations).apply(this, arguments));
+                }
+
+                _createClass(LoadLocations, [{
+                  key: "$enter",
+                  value: function $enter() {
+                    this._setState('WifiLocations.Ready');
+                  }
+                }]);
+
+                return LoadLocations;
+              }(this),
+              /*#__PURE__*/
+              function (_this26) {
+                _inherits(Ready, _this26);
+
+                function Ready() {
+                  _classCallCheck(this, Ready);
+
+                  return _possibleConstructorReturn(this, _getPrototypeOf(Ready).apply(this, arguments));
+                }
+
+                _createClass(Ready, [{
+                  key: "$enter",
+                  value: function $enter() {}
+                }, {
+                  key: "$onWifiItemSelect",
+                  value: function $onWifiItemSelect(_ref7) {
+                    var item = _ref7.item;
+                    console.log('$onWifiItemSelect :', item);
+                    this.selectedWifiName = item.name;
+
+                    this._setState('WifiLocations.WifiLoginScreen');
+                  }
+                }, {
+                  key: "_getFocused",
+                  value: function _getFocused() {
+                    return this.tag('WifiList');
+                  }
+                }]);
+
+                return Ready;
+              }(this),
+              /*#__PURE__*/
+              function (_this27) {
+                _inherits(WifiLoginScreen, _this27);
+
+                function WifiLoginScreen() {
+                  _classCallCheck(this, WifiLoginScreen);
+
+                  return _possibleConstructorReturn(this, _getPrototypeOf(WifiLoginScreen).apply(this, arguments));
+                }
+
+                _createClass(WifiLoginScreen, [{
+                  key: "$enter",
+                  value: function $enter() {
+                    // Show Keyboard
+                    this.tag('WifiLoginScreen').wifiName = this.selectedWifiName;
+                    this.tag('WifiLoginScreen').showLogin();
+                  }
+                }, {
+                  key: "$exit",
+                  value: function $exit() {
+                    // Hide Keyboard
+                    console.log('$exit :');
+                    this.tag('WifiLoginScreen').hideLogin();
+                  }
+                }, {
+                  key: "_handleBack",
+                  value: function _handleBack() {
+                    this._setState('WifiLocations.Ready');
+                  }
+                }, {
+                  key: "_getFocused",
+                  value: function _getFocused() {
+                    return this.tag('WifiLoginScreen');
+                  }
+                }]);
+
+                return WifiLoginScreen;
+              }(this)];
+            }
+          }]);
+
+          return WifiLocations;
         }(this)];
       }
     }]);

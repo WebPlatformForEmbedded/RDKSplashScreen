@@ -2,6 +2,18 @@
 
 function _typeof(obj) { if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
 
+function _wrapNativeSuper(Class) { var _cache = typeof Map === "function" ? new Map() : undefined; _wrapNativeSuper = function _wrapNativeSuper(Class) { if (Class === null || !_isNativeFunction(Class)) return Class; if (typeof Class !== "function") { throw new TypeError("Super expression must either be null or a function"); } if (typeof _cache !== "undefined") { if (_cache.has(Class)) return _cache.get(Class); _cache.set(Class, Wrapper); } function Wrapper() { return _construct2(Class, arguments, _getPrototypeOf(this).constructor); } Wrapper.prototype = Object.create(Class.prototype, { constructor: { value: Wrapper, enumerable: false, writable: true, configurable: true } }); return _setPrototypeOf(Wrapper, Class); }; return _wrapNativeSuper(Class); }
+
+function isNativeReflectConstruct() { if (typeof Reflect === "undefined" || !Reflect.construct) return false; if (Reflect.construct.sham) return false; if (typeof Proxy === "function") return true; try { Date.prototype.toString.call(Reflect.construct(Date, [], function () {})); return true; } catch (e) { return false; } }
+
+function _construct2(Parent, args, Class) { if (isNativeReflectConstruct()) { _construct2 = Reflect.construct; } else { _construct2 = function _construct(Parent, args, Class) { var a = [null]; a.push.apply(a, args); var Constructor = Function.bind.apply(Parent, a); var instance = new Constructor(); if (Class) _setPrototypeOf(instance, Class.prototype); return instance; }; } return _construct2.apply(null, arguments); }
+
+function _isNativeFunction(fn) { return Function.toString.call(fn).indexOf("[native code]") !== -1; }
+
+function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
+
+function _asyncToGenerator(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
+
 function ownKeys(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); if (enumerableOnly) symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; }); keys.push.apply(keys, symbols); } return keys; }
 
 function _objectSpread(target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i] != null ? arguments[i] : {}; if (i % 2) { ownKeys(source, true).forEach(function (key) { _defineProperty(target, key, source[key]); }); } else if (Object.getOwnPropertyDescriptors) { Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)); } else { ownKeys(source).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } } return target; }
@@ -77,8 +89,8 @@ var ux = function () {
         this.eventHandlers = [];
       }
     }, {
-      key: "_attach",
-      value: function _attach() {
+      key: "_registerListeners",
+      value: function _registerListeners() {
         var _this = this;
 
         events.forEach(function (event) {
@@ -95,14 +107,24 @@ var ux = function () {
         });
       }
     }, {
-      key: "_detach",
-      value: function _detach() {
+      key: "_deregisterListeners",
+      value: function _deregisterListeners() {
         var _this2 = this;
 
         events.forEach(function (event, index) {
           _this2.videoEl.removeEventListener(event, _this2.eventHandlers[index]);
         });
         this.eventHandlers = [];
+      }
+    }, {
+      key: "_attach",
+      value: function _attach() {
+        this._registerListeners();
+      }
+    }, {
+      key: "_detach",
+      value: function _detach() {
+        this._deregisterListeners();
       }
     }, {
       key: "_createVideoTexture",
@@ -224,7 +246,39 @@ var ux = function () {
               console.error('Failed to set up MediaKeys');
             });
           } else if (settings.stream && settings.stream.src) {
-            this.open(settings.stream.src);
+            if (!window.Hls) {
+              window.Hls =
+              /*#__PURE__*/
+              function () {
+                function Hls() {
+                  _classCallCheck(this, Hls);
+                }
+
+                _createClass(Hls, null, [{
+                  key: "isSupported",
+                  value: function isSupported() {
+                    console.warn("hls-light not included");
+                    return false;
+                  }
+                }]);
+
+                return Hls;
+              }();
+            }
+
+            if (ux.Ui.hasOption("hls") && Hls.isSupported()) {
+              if (!this._hls) this._hls = new Hls({
+                liveDurationInfinity: true
+              });
+
+              this._hls.loadSource(settings.stream.src);
+
+              this._hls.attachMedia(this.videoEl);
+
+              this.videoEl.style.display = "block";
+            } else {
+              this.open(settings.stream.src);
+            }
           } else {
             this.close();
           }
@@ -706,6 +760,12 @@ var ux = function () {
     }
 
     _createClass(ScaledImageTexture, [{
+      key: "_getLookupId",
+      value: function _getLookupId() {
+        var opts = this._scalingOptions;
+        return "".concat(this._src, "-").concat(opts.type, "-").concat(opts.width, "-").concat(opts.height);
+      }
+    }, {
       key: "_getSourceLoader",
       value: function _getSourceLoader() {
         var src = this._src;
@@ -1011,17 +1071,21 @@ var ux = function () {
                     this._currentApp = {
                       type: appClass,
                       fontFaces: []
-                    }; // Preload fonts.
+                    };
 
                     var fonts = this._currentApp.type.getFonts();
 
+                    Promise.all([// Preload fonts.
                     Ui.loadFonts(fonts.concat(Ui.getFonts())).then(function (fontFaces) {
                       _this13._currentApp.fontFaces = fontFaces;
                     })["catch"](function (e) {
                       console.warn('Font loading issues: ' + e);
+                    }), // Preload locale
+                    ux.locale.load(this._currentApp.type.getPath('locale/locale.json'))["catch"](function (e) {
+                      return console.warn("Localization disabled:", e);
+                    })])["finally"](function () {
+                      _this13._done();
                     });
-
-                    this._done();
                   }
                 }, {
                   key: "_done",
@@ -3842,17 +3906,204 @@ var ux = function () {
     keyboard: obj$2,
     itemlist: obj$3,
     slider: obj$4
-  }; // Exposes the ux namespace for apps.
+  };
+  /**
+   * Simple module for localization of strings.
+   *
+   * How to use:
+   * 1. Create localization file with following JSON format:
+   * {
+   *   "en" :{
+   *     "how": "How do you want your egg today?",
+   *     "boiledEgg": "Boiled egg",
+   *     "softBoiledEgg": "Soft-boiled egg",
+   *     "choice": "How to choose the egg",
+   *     "buyQuestion": "I'd like to buy {0} eggs, {1} dollars each."
+   *   },
+   *
+   *   "it": {
+   *     "how": "Come vuoi il tuo uovo oggi?",
+   *     "boiledEgg": "Uovo sodo",
+   *     "softBoiledEgg": "Uovo alla coque",
+   *     "choice": "Come scegliere l'uovo",
+   *     "buyQuestion": "Mi piacerebbe comprare {0} uova, {1} dollari ciascuna."
+   *   }
+   * }
+   * 
+   * 2. Use Locale's module load method, specifying path to your localization file and set chosen language, e.g.:
+   *    > Locale.load('static/locale/locale.json');
+   *    > Locale.setLanguage('en');
+   * 
+   * 3. Use localization strings:
+   *    > console.log(Locale.tr.how);
+   *    How do you want your egg today?
+   *    > console.log(Locale.tr.boiledEgg);
+   *    Boiled egg
+   * 
+   * 4. String formatting
+   *    > console.log(Locale.tr.buyQuestion.format(10, 0.5));
+   *    I'd like to buy 10 eggs, 0.5 dollars each.
+   */
 
-  var ux = {
+  var Locale =
+  /*#__PURE__*/
+  function () {
+    function Locale() {
+      _classCallCheck(this, Locale);
+
+      this.__enabled = false;
+    }
+    /**
+     * Loads translation object from external json file.
+     *  
+     * @param {String} path Path to resource.
+     * @return {Promise}
+     */
+
+
+    _createClass(Locale, [{
+      key: "load",
+      value: function () {
+        var _load = _asyncToGenerator(
+        /*#__PURE__*/
+        regeneratorRuntime.mark(function _callee(path) {
+          var _this30 = this;
+
+          return regeneratorRuntime.wrap(function _callee$(_context) {
+            while (1) {
+              switch (_context.prev = _context.next) {
+                case 0:
+                  if (this.__enabled) {
+                    _context.next = 2;
+                    break;
+                  }
+
+                  return _context.abrupt("return");
+
+                case 2:
+                  _context.next = 4;
+                  return fetch(path).then(function (resp) {
+                    return resp.json();
+                  }).then(function (resp) {
+                    _this30.loadFromObject(resp);
+                  });
+
+                case 4:
+                case "end":
+                  return _context.stop();
+              }
+            }
+          }, _callee, this);
+        }));
+
+        function load(_x) {
+          return _load.apply(this, arguments);
+        }
+
+        return load;
+      }()
+      /**
+       * Sets language used by module.
+       *
+       * @param {String} lang 
+       */
+
+    }, {
+      key: "setLanguage",
+      value: function setLanguage(lang) {
+        this.__enabled = true;
+        this.language = lang;
+      }
+      /**
+       * Returns reference to translation object for current language.
+       *
+       * @return {Object}
+       */
+
+    }, {
+      key: "loadFromObject",
+
+      /**
+       * Loads translation object from existing object (binds existing object).
+       *
+       * @param {Object} trObj 
+       */
+      value: function loadFromObject(trObj) {
+        this.__trObj = trObj;
+
+        for (var _i = 0, _Object$values = Object.values(this.__trObj); _i < _Object$values.length; _i++) {
+          var lang = _Object$values[_i];
+
+          for (var _i2 = 0, _Object$keys = Object.keys(lang); _i2 < _Object$keys.length; _i2++) {
+            var str = _Object$keys[_i2];
+            lang[str] = new LocalizedString(lang[str]);
+          }
+        }
+      }
+    }, {
+      key: "tr",
+      get: function get() {
+        return this.__trObj[this.language];
+      }
+    }]);
+
+    return Locale;
+  }();
+  /**
+   * Extended string class used for localization.
+   */
+
+
+  var LocalizedString =
+  /*#__PURE__*/
+  function (_String) {
+    _inherits(LocalizedString, _String);
+
+    function LocalizedString() {
+      _classCallCheck(this, LocalizedString);
+
+      return _possibleConstructorReturn(this, _getPrototypeOf(LocalizedString).apply(this, arguments));
+    }
+
+    _createClass(LocalizedString, [{
+      key: "format",
+
+      /**
+       * Returns formatted LocalizedString.
+       * Replaces each placeholder value (e.g. {0}, {1}) with corresponding argument.
+       * 
+       * E.g.:
+       * > new LocalizedString('{0} and {1} and {0}').format('A', 'B');
+       * A and B and A
+       *
+       * @param  {...any} args List of arguments for placeholders.
+       */
+      value: function format() {
+        for (var _len = arguments.length, args = new Array(_len), _key2 = 0; _key2 < _len; _key2++) {
+          args[_key2] = arguments[_key2];
+        }
+
+        var sub = args.reduce(function (string, arg, index) {
+          return string.split("{".concat(index, "}")).join(arg);
+        }, this);
+        return new LocalizedString(sub);
+      }
+    }]);
+
+    return LocalizedString;
+  }(_wrapNativeSuper(String)); // Exposes the ux namespace for apps.
+
+
+  var ux$1 = {
     Ui: Ui,
     App: App,
-    tools: tools
+    tools: tools,
+    locale: new Locale()
   };
 
   if (typeof window !== "undefined") {
-    window.ux = ux;
+    window.ux = ux$1;
   }
 
-  return ux;
+  return ux$1;
 }();

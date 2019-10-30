@@ -1,3 +1,9 @@
+/**
+ * Lightning v1.2.0
+ *
+ * https://github.com/WebPlatformForEmbedded/Lightning
+ */
+
 var lng = (function () {
     'use strict';
 
@@ -437,6 +443,7 @@ var lng = (function () {
     Utils.isNode = (typeof window === "undefined");
     Utils.isWeb = (typeof window !== "undefined");
     Utils.isWPE = Utils.isWeb && (navigator.userAgent.indexOf("WPE") !== -1);
+    Utils.isSpark = (typeof window === "undefined") && (typeof sparkscene !== "undefined");
 
     class Base {
 
@@ -2823,6 +2830,13 @@ var lng = (function () {
              */
             this._loadError = null;
 
+            /**
+             *  Hold a reference to the javascript variable which contains the texture, this is not required for WebGL in WebBrowsers but is required for Spark runtime.
+             * @type {object}
+             * @private
+             */
+            this._imageRef = null;
+
         }
 
         get loadError() {
@@ -2956,7 +2970,7 @@ var lng = (function () {
                             // Emit txError.
                             this.onError(err);
                         } else if (options && options.source) {
-                            if (!forceSync && options.throttle !== false) {
+                            if (!this.stage.isUpdatingFrame() && !forceSync && (options.throttle !== false)) {
                                 const textureThrottler = this.stage.textureThrottler;
                                 this._cancelCb = textureThrottler.genericCancelCb;
                                 textureThrottler.add(this, options);
@@ -2986,6 +3000,9 @@ var lng = (function () {
             }
 
             this.permanent = !!options.permanent;
+
+            if (options && options.imageRef)
+                this._imageRef = options.imageRef;
 
             if (this._isNativeTexture(source)) {
                 // Texture managed by caller.
@@ -3045,6 +3062,8 @@ var lng = (function () {
 
         clearNativeTexture() {
             this._nativeTexture = null;
+            //also clear the reference to the texture variable.
+            this._imageRef = null;
         }
 
         /**
@@ -4946,6 +4965,8 @@ var lng = (function () {
             if (changedDims) {
                 // Recalc mount, scale position.
                 this._recalcLocalTranslate();
+
+                this.element.onDimensionsChanged(this._w, this._h);
             }
         }
 
@@ -5871,6 +5892,10 @@ var lng = (function () {
                 if (reusable && reusable.isLoaded() && (reusable !== source)) {
                     this._replaceTextureSource(reusable);
                 }
+            } else {
+                if (this._resizeMode) {
+                    this._applyResizeMode();
+                }
             }
         }
 
@@ -6407,10 +6432,10 @@ var lng = (function () {
             // We do not use a promise so that loading is performed syncronous when possible.
             const loadPromise = this._load();
             if (!loadPromise) {
-                this._draw();
+                return Utils.isSpark ? this._stage.platform.drawText(this) : this._draw();
             } else {
                 return loadPromise.then(() => {
-                    this._draw();
+                    return Utils.isSpark ? this._stage.platform.drawText(this) : this._draw();
                 });
             }
         }
@@ -6448,6 +6473,22 @@ var lng = (function () {
 
             if (!wordWrapWidth) {
                 wordWrapWidth = innerWidth;
+            }
+
+            // Text overflow
+            if (this._settings.textOverflow && !this._settings.wordWrap) {
+                let suffix;
+                switch (this._settings.textOverflow) {
+                    case 'clip':
+                        suffix = '';
+                        break;
+                    case 'ellipsis':
+                        suffix = this._settings.maxLinesSuffix;
+                        break;
+                    default:
+                        suffix = this._settings.textOverflow;
+                }
+                this._settings.text = this.wrapWord(this._settings.text, wordWrapWidth, suffix);
             }
 
             // word wrap
@@ -6638,6 +6679,49 @@ var lng = (function () {
             this.renderInfo = renderInfo;
         };
 
+        wrapWord(word, wordWrapWidth, suffix) {
+            const suffixWidth = this._context.measureText(suffix).width;
+            const wordLen = word.length;
+            const wordWidth = this._context.measureText(word).width;
+
+            /* If word fits wrapWidth, do nothing */
+            if (wordWidth <= wordWrapWidth) {
+                return word;
+            }
+
+            /* Make initial guess for text cuttoff */
+            let cutoffIndex = Math.floor((wordWrapWidth * wordLen) / wordWidth);
+            let truncWordWidth = this._context.measureText(word.substring(0, cutoffIndex)).width + suffixWidth;
+
+            /* In case guess was overestimated, shrink it letter by letter. */
+            if (truncWordWidth > wordWrapWidth) {
+                while (cutoffIndex > 0) {
+                    truncWordWidth = this._context.measureText(word.substring(0, cutoffIndex)).width + suffixWidth;
+                    if (truncWordWidth > wordWrapWidth) {
+                        cutoffIndex -= 1;
+                    } else {
+                        break;
+                    }
+                }
+
+            /* In case guess was underestimated, extend it letter by letter. */
+            } else {
+                while (cutoffIndex < wordLen) {
+                    truncWordWidth = this._context.measureText(word.substring(0, cutoffIndex)).width + suffixWidth;
+                    if (truncWordWidth < wordWrapWidth) {
+                        cutoffIndex += 1;
+                    } else {
+                        // Finally, when bound is crossed, retract last letter.
+                        cutoffIndex -=1;
+                        break;
+                    }
+                }
+            }
+
+            /* If wrapWidth is too short to even contain suffix alone, return empty string */
+            return word.substring(0, cutoffIndex) + (wordWrapWidth >= suffixWidth ? suffix : '');
+        }
+
         /**
          * Applies newlines to a string to have it optimally fit into the horizontal
          * bounds set by the Text object's wordWrapWidth property.
@@ -6782,6 +6866,17 @@ var lng = (function () {
         set wordWrapWidth(v) {
             if (this._wordWrapWidth !== v) {
                 this._wordWrapWidth = v;
+                this._changed();
+            }
+        }
+
+        get textOverflow() {
+            return this._textOverflow;
+        }
+
+        set textOverflow(v) {
+            if (v != this._textOverflow) {
+                this._textOverflow = v;
                 this._changed();
             }
         }
@@ -7076,6 +7171,7 @@ var lng = (function () {
             if (this.fontFace !== null) parts.push("ff" + (Array.isArray(this.fontFace) ? this.fontFace.join(",") : this.fontFace));
             if (this.wordWrap !== true) parts.push("wr" + (this.wordWrap ? 1 : 0));
             if (this.wordWrapWidth !== 0) parts.push("ww" + this.wordWrapWidth);
+            if (this.textOverflow != "") parts.push("to" + this.textOverflow);
             if (this.lineHeight !== null) parts.push("lh" + this.lineHeight);
             if (this.textBaseline !== "alphabetic") parts.push("tb" + this.textBaseline);
             if (this.textAlign !== "left") parts.push("ta" + this.textAlign);
@@ -7122,12 +7218,13 @@ var lng = (function () {
 
                 if (p) {
                     p.then(() => {
-                        cb(null, Object.assign({renderInfo: renderer.renderInfo}, this.stage.platform.getTextureOptionsForDrawingCanvas(canvas)));
+                        /* FIXME: on some platforms (e.g. RPI), throttling text textures cause artifacts */
+                        cb(null, Object.assign({renderInfo: renderer.renderInfo, throttle: false}, this.stage.platform.getTextureOptionsForDrawingCanvas(canvas)));
                     }).catch((err) => {
                         cb(err);
                     });
                 } else {
-                    cb(null, Object.assign({renderInfo: renderer.renderInfo}, this.stage.platform.getTextureOptionsForDrawingCanvas(canvas)));
+                    cb(null, Object.assign({renderInfo: renderer.renderInfo, throttle: false}, this.stage.platform.getTextureOptionsForDrawingCanvas(canvas)));
                 }
             }
         }
@@ -7142,6 +7239,7 @@ var lng = (function () {
             if (this.fontFace !== null) nonDefaults["fontFace"] = this.fontFace;
             if (this.wordWrap !== true) nonDefaults["wordWrap"] = this.wordWrap;
             if (this.wordWrapWidth !== 0) nonDefaults["wordWrapWidth"] = this.wordWrapWidth;
+            if (this.textOverflow != "") nonDefaults["textOverflow"] = this.textOverflow;
             if (this.lineHeight !== null) nonDefaults["lineHeight"] = this.lineHeight;
             if (this.textBaseline !== "alphabetic") nonDefaults["textBaseline"] = this.textBaseline;
             if (this.textAlign !== "left") nonDefaults["textAlign"] = this.textAlign;
@@ -7181,6 +7279,7 @@ var lng = (function () {
             obj.fontFace = this._fontFace;
             obj.wordWrap = this._wordWrap;
             obj.wordWrapWidth = this._wordWrapWidth;
+            obj.textOverflow = this._textOverflow;
             obj.lineHeight = this._lineHeight;
             obj.textBaseline = this._textBaseline;
             obj.textAlign = this._textAlign;
@@ -7223,6 +7322,7 @@ var lng = (function () {
     proto._fontFace = null;
     proto._wordWrap = true;
     proto._wordWrapWidth = 0;
+    proto._textOverflow = "";
     proto._lineHeight = null;
     proto._textBaseline = "alphabetic";
     proto._textAlign = "left";
@@ -7287,13 +7387,14 @@ var lng = (function () {
             this._settings = settings;
 
             this._element = element;
-            this._getter = Element.getGetter(property);
-            this._setter = Element.getSetter(property);
+
+            this._getter = element.constructor.getGetter(property);
+            this._setter = element.constructor.getSetter(property);
 
             this._merger = settings.merger;
 
             if (!this._merger) {
-                this._merger = Element.getMerger(property);
+                this._merger = element.constructor.getMerger(property);
             }
 
             this._startValue = this._getter(this._element);
@@ -8514,6 +8615,15 @@ var lng = (function () {
         onPrecisionChanged() {
             this._updateDimensions();
         };
+
+        onDimensionsChanged(w, h) {
+            if (this.texture instanceof TextTexture) {
+                this.texture.w = w;
+                this.texture.h = h;
+                this.w = w;
+                this.h = h;
+            }
+        }
 
         _updateDimensions() {
             let w = this._getRenderWidth();
@@ -10712,7 +10822,7 @@ var lng = (function () {
                         // Ref.
                         const childCursor = `r${key.replace(/[^a-z0-9]/gi, "") + context.rid}`;
                         let type = value.type ? value.type : Element;
-                        if (type === "Element") {
+                        if (type === Element) {
                             loc.push(`const ${childCursor} = element.stage.createElement()`);
                         } else {
                             store.push(type);
@@ -11058,7 +11168,10 @@ var lng = (function () {
                 throw new Error("Ancestor event name must be prefixed by dollar sign.");
             }
 
-            return this._doFireAncestors(name, args);
+            const parent = this._getParentSignalHandler();
+            if (parent) {
+                return parent._doFireAncestors(name, args);
+            }
         }
 
         _doFireAncestors(name, args) {
@@ -11442,7 +11555,7 @@ var lng = (function () {
         _setupBuffers() {
             let gl = this.gl;
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._quadsBuffer);
-            let element = new DataView(this.renderState.quads.data, 0, this.renderState.quads.dataLength);
+            let element = new Float32Array(this.renderState.quads.data, 0, this.renderState.quads.dataLength);
             gl.bindBuffer(gl.ARRAY_BUFFER, this._attribsBuffer);
             gl.bufferData(gl.ARRAY_BUFFER, element, gl.DYNAMIC_DRAW);
         }
@@ -13446,7 +13559,7 @@ var lng = (function () {
                 let image = new Image();
                 if (!(src.substr(0,5) == "data:")) {
                     // Base64.
-                    image.crossOrigin = "anonymous";
+                    image.crossOrigin = "Anonymous";
                 }
                 image.onerror = function(err) {
                     // Ignore error message when cancelled.
@@ -13532,16 +13645,27 @@ var lng = (function () {
             /* WebGL blits automatically */
         }
 
-        registerKeyHandler(keyhandler) {
-            this._keyListener = e => {
+        registerKeydownHandler(keyhandler) {
+            this._keydownListener = (e) => {
                 keyhandler(e);
             };
-            window.addEventListener('keydown', this._keyListener);
+            window.addEventListener('keydown', this._keydownListener);
+        }
+
+        registerKeyupHandler(keyhandler) {
+            this._keyupListener = (e) => {
+                keyhandler(e);
+            };
+            window.addEventListener('keyup', this._keyupListener);
         }
 
         _removeKeyHandler() {
-            if (this._keyListener) {
-                window.removeEventListener('keydown', this._keyListener);
+            if (this._keydownListener) {
+                window.removeEventListener('keydown', this._keydownListener);
+            }
+
+            if (this._keyupListener) {
+                window.removeEventListener('keyup', this._keyupListener);
             }
         }
 
@@ -13549,7 +13673,11 @@ var lng = (function () {
 
     class PlatformLoader {
         static load(options) {
-            return WebPlatform;
+            if (options.platform) {
+                return options.platform;
+            } else {
+                return WebPlatform;
+            }
         }
     }
 
@@ -14758,6 +14886,12 @@ var lng = (function () {
         _render() {
             // Obtain a sequence of the quad operations.
             this._fillRenderState();
+
+            if (this.stage.getOption('readPixelsBeforeDraw')) {
+                const pixels = new Uint8Array(4);
+                const gl = this.stage.gl;
+                gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+            }
 
             // Now run them with the render executor.
             this._performRender();
@@ -16212,6 +16346,7 @@ var lng = (function () {
             opt('precision', 1);
             opt('canvas2d', false);
             opt('platform', null);
+            opt('readPixelsBeforeDraw', false);
         }
 
         setApplication(app) {
@@ -16299,18 +16434,15 @@ var lng = (function () {
 
             const changes = this.ctx.hasRenderUpdates();
 
+            // Update may cause textures to be loaded in sync, so by processing them here we may be able to show them
+            // during the current frame already.
+            this.textureThrottler.processSome();
+
             if (changes) {
                 this._updatingFrame = true;
                 this.ctx.update();
-
-                // Update may cause textures to be loaded in sync, so by processing them here we may be able to show them
-                // during the current frame already.
-                this.textureThrottler.processSome();
-
                 this.ctx.render();
                 this._updatingFrame = false;
-            } else {
-                this.textureThrottler.processSome();
             }
 
             this.platform.nextFrame(changes);
@@ -16318,6 +16450,10 @@ var lng = (function () {
             this.emit('frameEnd');
 
             this.frameCounter++;
+        }
+
+        isUpdatingFrame() {
+            return this._updatingFrame;
         }
 
         renderFrame() {
@@ -16470,6 +16606,7 @@ var lng = (function () {
             Application.booting = false;
 
             this.__updateFocusCounter = 0;
+            this.__keypressTimers = new Map();
 
             // We must construct while the application is not yet attached.
             // That's why we 'init' the stage later (which actually emits the attach event).
@@ -16479,9 +16616,14 @@ var lng = (function () {
             this.updateFocusSettings();
 
             this.__keymap = this.getOption('keys');
+
             if (this.__keymap) {
-                this.stage.platform.registerKeyHandler((e) => {
+                this.stage.platform.registerKeydownHandler((e) => {
                     this._receiveKeydown(e);
+                });
+
+                this.stage.platform.registerKeyupHandler((e) => {
+                    this._receiveKeyup(e);
                 });
             }
         }
@@ -16716,16 +16858,111 @@ var lng = (function () {
 
         _receiveKeydown(e) {
             const obj = e;
-            if (this.__keymap[e.keyCode]) {
-                if (!this.stage.application.focusTopDownEvent(["_capture" + this.__keymap[e.keyCode], "_captureKey"], obj)) {
-                    this.stage.application.focusBottomUpEvent(["_handle" + this.__keymap[e.keyCode], "_handleKey"], obj);
+            const key = this.__keymap[e.keyCode];
+            const path = this.focusPath;
+
+            if (key) {
+                const hasTimer = this.__keypressTimers.has(key);
+                // prevent event from getting fired when the timeout is still active
+                if (path[path.length - 1].longpress && hasTimer) {
+                    return;
+                }
+            }
+
+            if (key) {
+                if (!this.stage.application.focusTopDownEvent([`_capture${key}`, "_captureKey"], obj)) {
+                    this.stage.application.focusBottomUpEvent([`_handle${key}`, "_handleKey"], obj);
                 }
             } else {
                 if (!this.stage.application.focusTopDownEvent(["_captureKey"], obj)) {
                     this.stage.application.focusBottomUpEvent(["_handleKey"], obj);
                 }
             }
+
             this.updateFocusPath();
+
+            const consumer = path[path.length - 1];
+
+            if (key && consumer.longpress) {
+                this._startLongpressTimer(key, consumer);
+            }
+        }
+
+        /**
+         * Keyup listener
+         * To take away some confusion we add `Release` to the event to prevent ending up with method names like:
+         *  _handleLeftUp / _handleUpUp / _handleEnterUp etc
+         *
+         * @param e
+         * @private
+         */
+        _receiveKeyup(e) {
+            const obj = e;
+            const key = this.__keymap[e.keyCode];
+
+            if (key) {
+                if (!this.stage.application.focusTopDownEvent([`_capture${key}Release`, "_captureKeyRelease"], obj)) {
+                    this.stage.application.focusBottomUpEvent([`_handle${key}Release`, "_handleKeyRelease"], obj);
+                }
+            } else {
+                if (!this.stage.application.focusTopDownEvent(["_captureKeyRelease"], obj)) {
+                    this.stage.application.focusBottomUpEvent(["_handleKeyRelease"], obj);
+                }
+            }
+
+            this.updateFocusPath();
+
+            if (key) {
+                if (this.__keypressTimers.has(key)) {
+                    // keyup has fired before end of timeout so we clear it
+                    clearTimeout(this.__keypressTimers.get(key));
+                    // delete so we can register it again
+                    this.__keypressTimers.delete(key);
+                }
+            }
+        }
+
+        /**
+         * Registers and starts a timer for the pressed key. Timer will be cleared when the key is released
+         * before the timer goes off.
+         *
+         * If key is not release (keyup) the longpress handler will be fired.
+         * Configuration can be via the Components template:
+         *
+         * static _template() {
+         *     return {
+         *         w:100, h:100,
+         *         longpress:{up:700, down:500}
+         *     }
+         * }     *
+         * // this will get called when up has been pressed for 700ms
+         * _handleUpLong() {
+         *
+         * }
+         *
+         * @param key
+         * @param element
+         * @private
+         */
+        _startLongpressTimer(key, element) {
+            const config = element.longpress;
+            const lookup = key.toLowerCase();
+
+            if (config[lookup]) {
+                const timeout = config[lookup];
+                if (!Utils.isNumber(timeout)) {
+                    element._throwError("config value for longpress must be a number");
+                } else {
+                    this.__keypressTimers.set(key, setTimeout(() => {
+                        if (!this.stage.application.focusTopDownEvent([`_capture${key}Long`, "_captureKey"], {})) {
+                            this.stage.application.focusBottomUpEvent([`_handle${key}Long`, "_handleKey"], {});
+                        }
+
+                        this.__keypressTimers.delete(key);
+                    }, timeout || 500 /* prevent 0ms */));
+                }
+            }
+            return;
         }
 
         destroy() {
@@ -16741,6 +16978,14 @@ var lng = (function () {
             this.stage.setApplication(undefined);
             this._updateAttachedFlag();
             this._updateEnabledFlag();
+
+            if (this.__keypressTimers.size) {
+                for (const timer of this.__keypressTimers.values()) {
+                    clearTimeout(timer);
+                }
+
+                this.__keypressTimers.clear();
+            }
         }
 
         getCanvas() {
@@ -16791,44 +17036,6 @@ var lng = (function () {
             return {type: StaticCanvasTexture, content: {factory: canvasFactory, lookupId: lookupId}}
         }
 
-        static getPath(lines = [], strokeWidth){
-            if(!Array.isArray(lines)){
-                throw new Error("Please provide an array of lines");
-            }
-            const factory = (cb, stage)=>{
-                cb(null, this.createPath(stage,lines, strokeWidth));
-            };
-            const id = `path${Math.random()}`;
-            return Tools.getCanvasTexture(factory, id);
-        }
-
-        static createPath(stage, lines = [], strokeWidth=5){
-            const canvas = stage.platform.getDrawingCanvas();
-            const ctx = canvas.getContext("2d");
-            let i = 1, j = lines.length;
-
-            // todo: calculate w / h  / sx / ex / sy / ey from lines
-            // for now we draw it on a 1920x1080 canvas
-            canvas.width = 1920;
-            canvas.height = 1080;
-
-            ctx.imageSmoothEnabled = true;
-            ctx.lineWidth = strokeWidth;
-            ctx.lineJoin = ctx.lineCap = 'round';
-            ctx.shadowBlur = 5;
-            ctx.shadowColor = 'rgb(0,0,0)';
-
-            ctx.beginPath();
-            ctx.moveTo(lines[0][0],lines[0][1]);
-
-            for(; i < j; i++){
-                ctx.lineTo(lines[i][0],lines[i][1]);
-            }
-            ctx.stroke();
-
-            return canvas;
-        }
-
         static getRoundRect(w, h, radius, strokeWidth, strokeColor, fill, fillColor) {
             if (!Array.isArray(radius)){
                 // upper-left, upper-right, bottom-right, bottom-left.
@@ -16836,7 +17043,11 @@ var lng = (function () {
             }
 
             let factory = (cb, stage) => {
-                cb(null, this.createRoundRect(stage, w, h, radius, strokeWidth, strokeColor, fill, fillColor));
+                if (Utils.isSpark) {
+                    stage.platform.createRoundRect(cb, stage, w, h, radius, strokeWidth, strokeColor, fill, fillColor);
+                } else {
+                    cb(null, this.createRoundRect(stage, w, h, radius, strokeWidth, strokeColor, fill, fillColor));
+                }
             };
             let id = 'rect' + [w, h, strokeWidth, strokeColor, fill ? 1 : 0, fillColor].concat(radius).join(",");
             return Tools.getCanvasTexture(factory, id);
@@ -16896,7 +17107,11 @@ var lng = (function () {
             }
 
             let factory = (cb, stage) => {
-                cb(null, this.createShadowRect(stage, w, h, radius, blur, margin));
+                if (Utils.isSpark) {
+                    stage.platform.createShadowRect(cb, stage, w, h, radius, blur, margin);
+                } else {
+                    cb(null, this.createShadowRect(stage, w, h, radius, blur, margin));
+                }
             };
             let id = 'shadow' + [w, h, blur, margin].concat(radius).join(",");
             return Tools.getCanvasTexture(factory, id);
@@ -16942,7 +17157,11 @@ var lng = (function () {
 
         static getSvgTexture(url, w, h) {
             let factory = (cb, stage) => {
-                this.createSvg(cb, stage, url, w, h);
+                if (Utils.isSpark) {
+                    stage.platform.createSvg(cb, stage, url, w, h);
+                } else {
+                    this.createSvg(cb, stage, url, w, h);
+                }
             };
             let id = 'svg' + [w, h, url].join(",");
             return Tools.getCanvasTexture(factory, id);
@@ -16954,7 +17173,6 @@ var lng = (function () {
             ctx.imageSmoothingEnabled = true;
 
             let img = new Image();
-            img.crossOrigin = "anonymous";
             img.onload = () => {
                 canvas.width = w;
                 canvas.height = h;
@@ -18879,7 +19097,54 @@ var lng = (function () {
 
     }
 
-    class GrayscaleShader extends DefaultShader$1 {
+    class WebGLGrayscaleShader extends DefaultShader {
+
+        constructor(context) {
+            super(context);
+            this._amount = 1;
+        }
+
+        static getC2d() {
+            return C2dGrayscaleShader;
+        }
+
+
+        set amount(v) {
+            this._amount = v;
+            this.redraw();
+        }
+
+        get amount() {
+            return this._amount;
+        }
+
+        useDefault() {
+            return this._amount === 0;
+        }
+
+        setupUniforms(operation) {
+            super.setupUniforms(operation);
+            this._setUniform("amount", this._amount, this.gl.uniform1f);
+        }
+
+    }
+
+    WebGLGrayscaleShader.fragmentShaderSource = `
+    #ifdef GL_ES
+    precision lowp float;
+    #endif
+    varying vec2 vTextureCoord;
+    varying vec4 vColor;
+    uniform sampler2D uSampler;
+    uniform float amount;
+    void main(void){
+        vec4 color = texture2D(uSampler, vTextureCoord) * vColor;
+        float grayness = 0.2 * color.r + 0.6 * color.g + 0.2 * color.b;
+        gl_FragColor = vec4(amount * vec3(grayness, grayness, grayness) + (1.0 - amount) * color.rgb, color.a);
+    }
+`;
+
+    class C2dGrayscaleShader extends DefaultShader$1 {
 
         constructor(context) {
             super(context);
@@ -18887,7 +19152,7 @@ var lng = (function () {
         }
 
         static getWebGL() {
-            return GrayscaleShader$1;
+            return WebGLGrayscaleShader;
         }
 
 
@@ -18913,53 +19178,6 @@ var lng = (function () {
         }
 
     }
-
-    class GrayscaleShader$1 extends DefaultShader {
-
-        constructor(context) {
-            super(context);
-            this._amount = 1;
-        }
-
-        static getC2d() {
-            return GrayscaleShader;
-        }
-
-
-        set amount(v) {
-            this._amount = v;
-            this.redraw();
-        }
-
-        get amount() {
-            return this._amount;
-        }
-
-        useDefault() {
-            return this._amount === 0;
-        }
-
-        setupUniforms(operation) {
-            super.setupUniforms(operation);
-            this._setUniform("amount", this._amount, this.gl.uniform1f);
-        }
-
-    }
-
-    GrayscaleShader$1.fragmentShaderSource = `
-    #ifdef GL_ES
-    precision lowp float;
-    #endif
-    varying vec2 vTextureCoord;
-    varying vec4 vColor;
-    uniform sampler2D uSampler;
-    uniform float amount;
-    void main(void){
-        vec4 color = texture2D(uSampler, vTextureCoord) * vColor;
-        float grayness = 0.2 * color.r + 0.6 * color.g + 0.2 * color.b;
-        gl_FragColor = vec4(amount * vec3(grayness, grayness, grayness) + (1.0 - amount) * color.rgb, color.a);
-    }
-`;
 
     /**
      * This shader can be used to fix a problem that is known as 'gradient banding'.
@@ -20135,7 +20353,7 @@ var lng = (function () {
         Texture,
         EventEmitter,
         shaders: {
-            Grayscale: GrayscaleShader$1,
+            Grayscale: WebGLGrayscaleShader,
             BoxBlur: BoxBlurShader,
             Dithering: DitheringShader,
             CircularPush: CircularPushShader,
@@ -20151,7 +20369,7 @@ var lng = (function () {
             C2dShader,
             C2dDefaultShader: DefaultShader$1,
             c2d: {
-                Grayscale: GrayscaleShader,
+                Grayscale: C2dGrayscaleShader,
                 Blur: BlurShader
             }
         },

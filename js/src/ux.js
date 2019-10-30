@@ -63,7 +63,7 @@ var ux = (function () {
             this.eventHandlers = [];
         }
 
-        _attach() {
+        _registerListeners() {
             events.forEach(event => {
                 const handler = (e) => {
                     this.fire(event, {videoElement: this.videoEl, event: e});
@@ -73,11 +73,19 @@ var ux = (function () {
             });
         }
 
-        _detach() {
+        _deregisterListeners() {
             events.forEach((event, index) => {
                 this.videoEl.removeEventListener(event, this.eventHandlers[index]);
             });
             this.eventHandlers = [];
+        }
+
+        _attach() {
+            this._registerListeners();
+        }
+
+        _detach() {
+            this._deregisterListeners();
         }
 
         _createVideoTexture() {
@@ -186,7 +194,22 @@ var ux = (function () {
                         console.error('Failed to set up MediaKeys');
                     });
                 } else if (settings.stream && settings.stream.src) {
-                    this.open(settings.stream.src);
+                    if(!window.Hls){
+                        window.Hls = class Hls{
+                            static isSupported(){
+                                console.warn("hls-light not included");
+                                return false;
+                            }
+                        };
+                    }
+                    if (ux.Ui.hasOption("hls") && Hls.isSupported()) {
+                        if (!this._hls) this._hls = new Hls({liveDurationInfinity: true});
+                        this._hls.loadSource(settings.stream.src);
+                        this._hls.attachMedia(this.videoEl);
+                        this.videoEl.style.display = "block";
+                    } else {
+                        this.open(settings.stream.src);
+                    }
                 } else {
                     this.close();
                 }
@@ -507,6 +530,11 @@ var ux = (function () {
             }
         }
 
+        _getLookupId() {
+            const opts = this._scalingOptions;
+            return `${this._src}-${opts.type}-${opts.width}-${opts.height}`;
+        }
+
         _getSourceLoader() {
             let src = this._src;
             if (this.stage.getOption('srcBasePath')) {
@@ -692,14 +720,24 @@ var ux = (function () {
                                         fontFaces: []
                                     };
 
-                                    // Preload fonts.
                                     const fonts = this._currentApp.type.getFonts();
-                                    Ui.loadFonts(fonts.concat(Ui.getFonts())).then((fontFaces) => {
-                                        this._currentApp.fontFaces = fontFaces;
-                                    }).catch((e) => {
-                                        console.warn('Font loading issues: ' + e);
+
+                                    Promise.all([
+                                        // Preload fonts.
+                                        Ui.loadFonts(fonts.concat(Ui.getFonts()))
+                                        .then((fontFaces) => {
+                                            this._currentApp.fontFaces = fontFaces;
+                                        }).catch((e) => {
+                                            console.warn('Font loading issues: ' + e);
+                                        }),
+
+                                        // Preload locale
+                                        ux.locale.load(this._currentApp.type.getPath('locale/locale.json'))
+                                        .catch((e) => console.warn("Localization disabled:", e))
+
+                                    ]).finally(()=>{
+                                        this._done();
                                     });
-                                    this._done();
                                 }
                                 _done() {
                                     this._setState("App.Started");
@@ -2558,18 +2596,135 @@ var ux = (function () {
         slider: obj$4
     };
 
+    /**
+     * Simple module for localization of strings.
+     *
+     * How to use:
+     * 1. Create localization file with following JSON format:
+     * {
+     *   "en" :{
+     *     "how": "How do you want your egg today?",
+     *     "boiledEgg": "Boiled egg",
+     *     "softBoiledEgg": "Soft-boiled egg",
+     *     "choice": "How to choose the egg",
+     *     "buyQuestion": "I'd like to buy {0} eggs, {1} dollars each."
+     *   },
+     *
+     *   "it": {
+     *     "how": "Come vuoi il tuo uovo oggi?",
+     *     "boiledEgg": "Uovo sodo",
+     *     "softBoiledEgg": "Uovo alla coque",
+     *     "choice": "Come scegliere l'uovo",
+     *     "buyQuestion": "Mi piacerebbe comprare {0} uova, {1} dollari ciascuna."
+     *   }
+     * }
+     * 
+     * 2. Use Locale's module load method, specifying path to your localization file and set chosen language, e.g.:
+     *    > Locale.load('static/locale/locale.json');
+     *    > Locale.setLanguage('en');
+     * 
+     * 3. Use localization strings:
+     *    > console.log(Locale.tr.how);
+     *    How do you want your egg today?
+     *    > console.log(Locale.tr.boiledEgg);
+     *    Boiled egg
+     * 
+     * 4. String formatting
+     *    > console.log(Locale.tr.buyQuestion.format(10, 0.5));
+     *    I'd like to buy 10 eggs, 0.5 dollars each.
+     */
+
+    class Locale {
+
+        constructor() {
+            this.__enabled = false;
+        }
+
+        /**
+         * Loads translation object from external json file.
+         *  
+         * @param {String} path Path to resource.
+         * @return {Promise}
+         */
+        async load(path) {
+            if (!this.__enabled) {
+                return;
+            }
+
+            await fetch(path)
+            .then((resp) => resp.json())
+            .then((resp) => {
+                this.loadFromObject(resp);
+            });
+        }
+
+        /**
+         * Sets language used by module.
+         *
+         * @param {String} lang 
+         */
+        setLanguage(lang) {
+            this.__enabled = true;
+            this.language = lang;
+        }
+
+        /**
+         * Returns reference to translation object for current language.
+         *
+         * @return {Object}
+         */
+        get tr() {
+            return this.__trObj[this.language];
+        }
+
+        /**
+         * Loads translation object from existing object (binds existing object).
+         *
+         * @param {Object} trObj 
+         */
+        loadFromObject(trObj) {
+            this.__trObj = trObj;
+            for (const lang of Object.values(this.__trObj)) {
+                for (const str of Object.keys(lang)) {
+                    lang[str] = new LocalizedString(lang[str]);
+                }
+            }
+        }
+    }
+
+    /**
+     * Extended string class used for localization.
+     */
+    class LocalizedString extends String {
+        /**
+         * Returns formatted LocalizedString.
+         * Replaces each placeholder value (e.g. {0}, {1}) with corresponding argument.
+         * 
+         * E.g.:
+         * > new LocalizedString('{0} and {1} and {0}').format('A', 'B');
+         * A and B and A
+         *
+         * @param  {...any} args List of arguments for placeholders.
+         */
+        format(...args) {
+            const sub = args.reduce((string, arg, index) => string.split(`{${index}}`).join(arg), this);
+            return new LocalizedString(sub);
+        }
+    }
+
     // Exposes the ux namespace for apps.
 
-    const ux = {
+    const ux$1 = {
         Ui,
         App,
-        tools
+        tools,
+        locale: new Locale()
     };
 
     if (typeof window !== "undefined") {
-        window.ux = ux;
+        window.ux = ux$1;
     }
 
-    return ux;
+    return ux$1;
 
 }());
