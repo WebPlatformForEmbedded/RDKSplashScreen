@@ -252,6 +252,30 @@ var appBundle = (function () {
 
 	    constructor(config) {
 	        this._thunderjs = new ThunderJS(config);
+
+	        this._networks = undefined;
+	    }
+
+	    configs() {
+	        return this._thunderjs.call('WifiControl', 'configs')
+	    }
+
+	    deleteConfigs() {
+	        return this._thunderjs.call('WifiControl', 'configs').then( (configs) => {
+	            configs.forEach(config => {
+	                this._thunderjs.call('WifiControl', 'delete', { ssid : config.ssid });
+	            });
+	        })
+	    }
+
+	    getNetwork(ssid) {
+	        if (this._networks === undefined)
+	            return undefined
+
+	        return this._networks.filter(n => {
+	            if (n.name === ssid)
+	                return true
+	        })[0]
 	    }
 
 	    networks() {
@@ -262,8 +286,7 @@ var appBundle = (function () {
 	                        if (data === undefined || data.length === undefined || data.length === 0)
 	                            return;
 
-	                        this._networks = data;
-	                        let networks = data.filter( n => {
+	                        this._networks = data.filter( n => {
 	                            if (n.ssid && n.ssid !== '')
 	                                return true
 	                            else
@@ -288,14 +311,25 @@ var appBundle = (function () {
 	                            else
 	                                signal = 0;
 
-	                            return { name : n.ssid, strength : signal, protected : n.pairs[0].method === 'ESS' ? false : true }
+
+	                            let type;
+	                            if (n.pairs[0].method === 'WPA2' || n.pairs[0].method === 'WPA')
+	                                type = 'WPA';
+	                            else if (n.pairs[0].method === 'WEP')
+	                                type = 'Unknown';
+	                            else if (n.pairs[0].method === 'ESS')
+	                                type = 'Unsecure';
+	                            else
+	                                type = 'Unkown';
+
+	                            return { name : n.ssid, strength : signal, protected : n.pairs[0].method === 'ESS' ? false : true, type: type }
 	                        });
 
 	                        if (this._wifiControlScanListener)
 	                            this._wifiControlScanListener.dispose();
 
-	                        console.log(`Got ${networks.length} networks`);
-	                        resolve(networks);
+	                        console.log(`Got ${this._networks.length} networks`);
+	                        resolve(this._networks);
 	                    });
 	            };
 
@@ -309,47 +343,45 @@ var appBundle = (function () {
 	        });
 	    }
 
-	    connect(ssid, password) {
+	    scanAndConnect(ssid, password, type) {
 	        return new Promise( (resolve, reject) => {
-	            console.log(`Connecting to ${ssid}`);
-	            let network = this._networks.filter(n => {
-	                if (n.ssid === ssid)
-	                    return true
-	            })[0];
-
-	            let type;
-	            if (network.pairs[0].method === 'WPA2' || network.pairs[0].method === 'WPA')
-	                type = 'WPA';
-	            else if (network.pairs[0].method === 'WEP')
-	                type = 'Unknown';
-	            else if (network.pairs[0].method === 'ESS')
-	                type = 'Unsecure';
-	            else
-	                type = 'Unkown';
-
-	            if (this._wifiConnectionListener)
-	                this._wifiControlScanListener.dispose(this._wifiConnectionListener);
-
-	            return this._thunderjs.call('WifiControl', `config@${ssid}`, {
-	                ssid : ssid,
-	                accesspoint : false,
-	                psk : password,
-	                type : type
-	            }).then( () => {
-	                this._wifiConnectionListener = this._thunderjs.on('WifiControl', 'connectionchange', () => {
-	                    console.log(`Succesfully connected to wifi, getting IP`);
-	                    this._thunderjs.call('NetworkControl', 'request', { device: 'wlan0' });
-	                });
-
-	                this._thunderjs.call('WifiControl', 'connect', { ssid: ssid });
-	            })
+	            this.networks()
+	            .then( (networks) => {
+	                    if (this.getNetwork(ssid) === undefined )
+	                        reject('Network does not exist');
+	                })
+	            .then( this.connect(ssid, password, type) )
+	            .then( resolve() );
 	        })
 	    }
 
+	    connect(ssid, password, type) {
+	        console.log(`Connecting to ${ssid} with psk: ${password} and type ${type}`);
 
+	        if (this._wifiConnectionListener)
+	            this._wifiControlScanListener.dispose(this._wifiConnectionListener);
+
+	        return this._thunderjs.call('WifiControl', `config@${ssid}`, {
+	            ssid : ssid,
+	            accesspoint : false,
+	            psk : password,
+	            type : type
+	        }).then( () => {
+	            this._wifiConnectionListener = this._thunderjs.on('WifiControl', 'connectionchange', () => {
+	                console.log('Succesfully connected to wifi, storing configuration');
+	                this._thunderjs.call('WifiControl', 'store');
+	                console.log('Getting IP on wlan0');
+	                // FIXME - we should be able to handle more then wlan0
+	                this._thunderjs.call('NetworkControl', 'request', { device: 'wlan0' });
+	            });
+
+	            this._thunderjs.call('WifiControl', 'connect', { ssid: ssid });
+	        })
+	    }
 	}
 
 	const CONNECTION_TIMEOUT = 15000;
+	const WIFI_CONNECTION_TIMEOUT = 30000;
 
 	class WPE {
 	    constructor(host, port, stage) {
@@ -361,34 +393,32 @@ var appBundle = (function () {
 	        this._wifi = new Wifi(config);
 
 	        this._stage = stage;
-	        this._baseBootmanagerUrl = 'http://bootmanager.metrological.com/rdk/landingpage';
+	        this._baseBootmanagerUrl = 'http://bootmanager.metrological.com';
+	        this._landingBaseBootPageDefault = 'rdk/landingpage';
 	        this.STATES = {
 	            NOIP: 1,
 	            HASIP: 2,
-	            HASINTERNET: 3
+	            HASTIME: 3,
+	            HASINTERNET: 4
 	        };
 
 	        this._state = this.STATES.NOIP;
 	        this._thunderjs = new ThunderJS(config);
-	        this._thunderjs.on('Controller', 'statechange', this._onMessage.bind(this));
-	    }
+	        this._thunderjs.on('Controller', 'all', this._onMessage.bind(this));
 
-	    connectWifi(ssid, passwd) {
-	        this._updateUIState('ConnectingToNetwork', ssid);
-	        this._wifi.connect(ssid, passwd).then( () => {
-	            setTimeout(this._noConnectionAfterTime.bind(this), CONNECTION_TIMEOUT);
-	            this._checkForIP();
+	        this._deviceId = undefined;
+	        this._thunderjs.call('DeviceInfo', 'systeminfo').then( systeminfo => {
+	            this._deviceId = systeminfo.deviceid;
 	        });
-
 	    }
 
 	    init() {
 	        console.log('init');
+	        /*
 	        this._uxPlugin = undefined;
 	        this._wifiPlugin = undefined;
 	        this._state = this.STATES.NOIP;
-
-	        // check if we have a wifi or ux plugin
+	        */
 	        this._thunderjs.call('Controller', 'status').then( _plugins => {
 	            for (let i=0; i < _plugins.length; i++) {
 	                let _p = _plugins[i];
@@ -405,88 +435,168 @@ var appBundle = (function () {
 	            }
 	        });
 
-	        this._checkForIP();
+	        this.check();
 	        setTimeout(this._noConnectionAfterTime.bind(this), CONNECTION_TIMEOUT);
 	    }
 
+	    /*
+	     * Failure handlers
+	     */
 	    _noConnectionAfterTime() {
 	        console.log('_noConnectionAfterTime');
-	        if (this._state !== this.STATES.HASINTERNET) {
-	            if (this._wifiPlugin === undefined) {
+	        if (this._state === this.STATES.NOIP) {
+	            if (this._wifiPlugin === undefined)
 	                this._updateUIState('NoConnection');
-	            } else {
-	                this._updateUIState('ScanningForNetworks');
-	                this._wifi.networks().then( networks => {
-	                    this._updateUIState('WifiLocations', networks);
-	                });
-	            }
+	            else
+	                this._checkAvailableWifiConfigs();
 	        }
 	    }
 
-	    _checkForIP() {
-	        console.log('_checkForIP');
-	        this._thunderjs.call('Controller','status@TimeSync')
-	            .then((res) => {
-	                if (res && Array.isArray(res) && res[0] && res[0].state === "activated"){
-	                    this._state = this.STATES.HASIP;
-	                    console.log('_checkForIP HASIP');
-	                    this._initState();
-	                    this._checkForInternet();
+	    _noWiFiConnectionAfterTime() {
+	        console.log('_noWiFiConnectionAfterTime');
+	        if (this._state !== this.STATES.HASINTERNET) {
+	            this._updateUIState('WifiConnectError');
+	            // delete the config and render wifi list
+	            this._wifi.deleteConfigs().then( () => {
+	                this._wifi.networks().then( networks => {
+	                    this._wifiNetworks = networks;
+	                    this._updateUIState('WifiLocations', networks);
+	                });
+	            });
+	        }
+	    }
+
+
+	    /*
+	     * WIFI
+	     */
+	    _checkAvailableWifiConfigs() {
+	        console.log('_checkAvailableWifiConfigs');
+
+	        this._wifi.configs().then( configs => {
+	            console.log('_checkAvailableWifiConfigs configs:', configs);
+	            if (configs.length === 0) {
+	                // no wifi configs found, scan and show UI
+	                console.log('_checkAvailableWifiConfigs no configs found, scanning');
+	                this._updateUIState('ScanningForNetworks');
+
+	                this._wifi.networks().then( networks => {
+	                    this._updateUIState('WifiLocations', networks);
+	                });
+
+	            } else {
+	                // connect to config[0]
+	                console.log('_checkAvailableWifiConfigs found config, connecting');
+	                this._updateUIState('ConnectingToNetwork', configs[0].ssid);
+
+	                setTimeout(this._noWiFiConnectionAfterTime.bind(this), WIFI_CONNECTION_TIMEOUT);
+	                this._wifi.scanAndConnect(configs[0].ssid, configs[0].psk, configs[0].type).then( () => {
+	                    this.check();
+	                }).catch( e => {
+	                    this._updateUIState('WifiConnectError');
+	                });
+	            }
+	        });
+	    }
+
+	    connectWifi(ssid, passwd) {
+	        this._updateUIState('ConnectingToNetwork', ssid);
+
+	        let network = this._wifi.getNetwork(ssid);
+
+	        setTimeout(this._noWiFiConnectionAfterTime.bind(this), WIFI_CONNECTION_TIMEOUT);
+	        this._wifi.connect(network.name, passwd, network.type).then( () => {
+	            this.check();
+	        });
+	    }
+
+	    /*
+	     * Checkers
+	     */
+
+	    check() {
+	        // stagger checks, to make sure were not checking too much in parallel
+	        if (this._checkInProgress === true)
+	            return setTimeout(this.check.bind(this), 5000)
+
+	        console.log('check');
+	        this._checkInProgress = true;
+
+	        this._checkIPAddress()
+	            .then( this._checkForTime.bind(this) )
+	            .then( this._checkForInternet.bind(this) )
+	            .then( () => {
+	                console.log('check state:', this._state);
+
+	                if (this._state >= this.STATES.HASTIME) {
+	                    this._getBootmanagerUrl()
+	                    .then( data => {
+	                        this._updateUIState('Ready');
+
+	                        if (data.url && this._uxPlugin === undefined)
+	                            // we dont seem to have a ux plugin, redirect the current window instead
+	                            this._updateUIState('GoToURL', data);
+	                        else if (data.url)
+	                            this._launchUx(data.url);
+	                    }).catch(err => {
+	                        console.error(err);
+	                    });
+	                } else {
+	                    this._checkInProgress = false;
 	                }
 	            })
-	            .catch((e) => {
-	                console.error('Error', e);
+	            .catch((err) => {
+	                this._checkInProgress = false;
+	                console.error('Error', err);
+	                this._updateUIState('NoConnection');
 	            });
 	    }
 
+	    _checkIPAddress() {
+	        console.log('_checkIPAddress');
+	        return this._thunderjs.DeviceInfo.addresses()
+	            .then(data => {
+	                console.log('_parseNetworks', data);
+	                let ipList = data.filter(d => {
+	                    if (d.name === 'lo' || d.ip === undefined || d.ip.length < 1)
+	                        return false
+	                    else
+	                        return true
+	                }).map(d => {
+	                    return d.ip[0]
+	                });
+
+	                if (ipList.length > 0) {
+	                    this._updateUIState('HasLocalNetwork', ipList.toString());
+	                    this._state = this.STATES.HASIP;
+	                }
+	            })
+	    }
+
+	    _checkForTime() {
+	        console.log('_checkForTime');
+	        return this._thunderjs.call('Controller','status@TimeSync')
+	            .then((res) => {
+	                if (res && Array.isArray(res) && res[0] && res[0].state === "activated"){
+	                    this._state = this.STATES.HASTIME;
+	                    console.log('_checkForTime HASTIME');
+	                }
+	            })
+	    }
+
 	    _checkForInternet() {
+	        // hack to avoid calling to location sync without time, this for somehow crashed my system
+	        if (this._state < this.STATES.HASTIME)
+	            return Promise.resolve()
+
 	        console.log('_checkForInternet');
-	        this._thunderjs.call('LocationSync', 'location')
+	        return this._thunderjs.call('LocationSync', 'location')
 	            .then( (res) => {
 	                if (res.publicip !== undefined && res.publicip !== '') {
 	                    this._state = this.STATES.HASINTERNET;
 	                    console.log('_checkForInternet HASINTERNET');
-	                    this._initState();
 	                }
 	            })
-	            .catch((e) => {
-	                console.error('Error', e);
-	            });
-	    }
-
-	    _onMessage(notification) {
-	        if (!notification) return;
-
-	        if (notification.callsign === 'LocationSync' && notification.state === 'Activated')
-	            this._checkForIP();
-
-	        if (notification.callsign === 'TimeSync' && notification.state === 'Activated')
-	            setTimeout(this._checkForInternet.bind(this), 5000);
-
-	        if (notification.callsign === 'NetworkControl')
-	            this._checkForIP();
-
-	    }
-
-	    _initState() {
-	        console.log('_initState state:', this._state);
-	        if (this._state === this.STATES.NOIP) return;
-
-	        if (this._state >= this.STATES.HASIP)
-	            this._getIPAddress();
-
-	        if (this._state === this.STATES.HASINTERNET) {
-	                this._getBootmanagerUrl()
-	                .then( data => {
-	                    if (this._uxPlugin === undefined)
-	                        // we dont seem to have a ux plugin, redirect the current window instead
-	                        this._updateUIState('GoToURL', data);
-	                    else
-	                        this._launchUx(data.url);
-	                }).catch(err => {
-	                    console.error(err);
-	                });
-	        }
 	    }
 
 	    _updateUIState(state, data){
@@ -494,9 +604,53 @@ var appBundle = (function () {
 	        this._stage._setState(state, [{data:data}]);
 	    }
 
+	    /*
+	     * Notifications
+	     */
+	    _onMessage(notification) {
+	        console.log('_onMessage', notification);
+	        if (!notification) return;
+
+	        let _state;
+	        if (notification.data !== undefined)
+	            _state = notification.data.state;
+
+	        if (notification.callsign === 'LocationSync')
+	            this.check();
+
+	        if (notification.callsign === 'TimeSync')
+	            this.check();
+
+	        if (notification.callsign === 'NetworkControl')
+	            this.check();
+
+	    }
+
+	    /*
+	     * Final stage handlers
+	     */
 	    _getBootmanagerUrl(info) {
 	        const url = this._baseBootmanagerUrl;
-	        return this._xhr('GET', url);
+	        console.log('_getBootmanagerUrl');
+	        return this._getConfig().then( (config) => {
+	            console.log('_getBootmanagerUrl config & deviceId', config, this._deviceId);
+	            const _encodedDeviceId = encodeURIComponent(this._deviceId);
+
+	            if (config !== undefined && config.url !== undefined) {
+	                console.log('_getBootmanagerUrl by url', config.url);
+	                return this._xhr('GET', `${config.url}/${_encodedDeviceId}`)
+	            } else if (config !== undefined && config.operator !== undefined) {
+	                console.log('_getBootmanagerUrl by operator', config.operator);
+	                return this._xhr('GET', `${this._baseBootmanagerUrl}/${config.operator}/${_encodedDeviceId}`)
+	            } else {
+	                console.log('_getBootmanagerUrl default', this._landingBaseBootPageDefault);
+	                return this._xhr('GET', `${this._baseBootmanagerUrl}/${this._landingBaseBootPageDefault}`)
+	            }
+	        }).catch(e => {
+	            console.error('_getBootmanagerUrl error', e);
+	            console.log('_getBootmanagerUrl fallback to default', this._landingBaseBootPageDefault);
+	            return this._xhr('GET', `${this._baseBootmanagerUrl}/${this._landingBaseBootPageDefault}`)
+	        })
 	    }
 
 	    _launchUx(url) {
@@ -539,31 +693,11 @@ var appBundle = (function () {
 	        this._thunderjs.call('Controller', 'deactivate', {'callsign': 'WebKitBrowser'});
 	    }
 
-	    _getIPAddress() {
-	        console.log('_getIPAddress');
-	        this._thunderjs.DeviceInfo.addresses()
-	            .then(this._parseNetworks.bind(this))
-	            .catch((err) => {
-	                this._updateUIState('NoConnection');
-	            });
-	    }
-
-	    _parseNetworks(data) {
-	        console.log('_parseNetworks', data);
-	        let ipList = data.filter(d => {
-	            if (d.name === 'lo' || d.ip === undefined || d.ip.length < 1)
-	                return false
-	            else
-	                return true
-	        }).map(d => {
-	            return d.ip[0]
-	        });
-
-	        for (var i in data){
-	            if (data[i].name === 'eth0' || data[i].name === 'wlan0'){
-	                this._updateUIState('HasLocalNetwork', ipList.toString());
-	            }
-	        }
+	    /*
+	     * Utility
+	     */
+	    _getConfig() {
+	        return this._xhr('GET', '/config.json');
 	    }
 
 	    _xhr(method, url, body) {
@@ -1251,11 +1385,6 @@ var appBundle = (function () {
 						this.tag('Message').message = `Connected; IP: ${data}`;
 					}
 				},
-				class HasLocalNetwork extends this{
-					$enter(state, { data }){
-						this.tag('Message').message = `Connected; IP: ${data}`;
-					}
-				},
 				class ConnectingToNetwork extends this{
 					$enter(state, { data }){
 						this.tag('Message').message = `Connecting to: ${data}`;
@@ -1263,7 +1392,22 @@ var appBundle = (function () {
 				},
 				class ScanningForNetworks extends this{
 					$enter(state){
-						this.tag('Message').message = `Scanning for networks...`;
+						this.tag('Message').message = 'Scanning for networks...';
+					}
+				},
+				class ThunderError extends this{
+					$enter(state){
+						this.tag('Message').message = 'Error connecting to Thunder';
+					}
+				},
+				class WifiConnectError extends this{
+					$enter(state){
+						this.tag('Message').message = 'Error connecting to WiFi';
+					}
+				},
+				class Ready extends this{
+					$enter(state){
+						this.tag('Message').message = "We're ready!";
 					}
 				},
 				class GoToURL extends this{
@@ -1280,7 +1424,6 @@ var appBundle = (function () {
 				class NoConnection extends this{
 					$enter(){
 						this.tag('Message').message = 'No valid internet connection';
-						this._setState('WifiLocations');
 					}
 				},
 				class WifiLocations extends this{

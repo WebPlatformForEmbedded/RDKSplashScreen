@@ -956,19 +956,45 @@ var appBundle = function () {
       _classCallCheck(this, Wifi);
 
       this._thunderjs = new ThunderJS(config);
+      this._networks = undefined;
     }
 
     _createClass(Wifi, [{
+      key: "configs",
+      value: function configs() {
+        return this._thunderjs.call('WifiControl', 'configs');
+      }
+    }, {
+      key: "deleteConfigs",
+      value: function deleteConfigs() {
+        var _this2 = this;
+
+        return this._thunderjs.call('WifiControl', 'configs').then(function (configs) {
+          configs.forEach(function (config) {
+            _this2._thunderjs.call('WifiControl', 'delete', {
+              ssid: config.ssid
+            });
+          });
+        });
+      }
+    }, {
+      key: "getNetwork",
+      value: function getNetwork(ssid) {
+        if (this._networks === undefined) return undefined;
+        return this._networks.filter(function (n) {
+          if (n.name === ssid) return true;
+        })[0];
+      }
+    }, {
       key: "networks",
       value: function networks() {
-        var _this2 = this;
+        var _this3 = this;
 
         return new Promise(function (resolve, reject) {
           var _getWifiNetworks = function _getWifiNetworks() {
-            _this2._thunderjs.call('WifiControl', 'networks').then(function (data) {
+            _this3._thunderjs.call('WifiControl', 'networks').then(function (data) {
               if (data === undefined || data.length === undefined || data.length === 0) return;
-              _this2._networks = data;
-              var networks = data.filter(function (n) {
+              _this3._networks = data.filter(function (n) {
                 if (n.ssid && n.ssid !== '') return true;else return false;
               }).map(function (n) {
                 // the version I have has something weird with the signal strength, lets work around it, looks like an long int rollover of 4294967295
@@ -976,59 +1002,68 @@ var appBundle = function () {
 
                 var signal = 0;
                 if (n.signal < 40) signal = 100;else if (n.signal < 50 && n.signal > 40) signal = 90;else if (n.signal < 60 && n.signal > 50) signal = 75;else if (n.signal < 70 && n.signal > 60) signal = 50;else if (n.signal > 80 && n.signal < 70) signal = 25;else signal = 0;
+                var type;
+                if (n.pairs[0].method === 'WPA2' || n.pairs[0].method === 'WPA') type = 'WPA';else if (n.pairs[0].method === 'WEP') type = 'Unknown';else if (n.pairs[0].method === 'ESS') type = 'Unsecure';else type = 'Unkown';
                 return {
                   name: n.ssid,
                   strength: signal,
-                  "protected": n.pairs[0].method === 'ESS' ? false : true
+                  "protected": n.pairs[0].method === 'ESS' ? false : true,
+                  type: type
                 };
               });
-              if (_this2._wifiControlScanListener) _this2._wifiControlScanListener.dispose();
-              console.log("Got ".concat(networks.length, " networks"));
-              resolve(networks);
+              if (_this3._wifiControlScanListener) _this3._wifiControlScanListener.dispose();
+              console.log("Got ".concat(_this3._networks.length, " networks"));
+              resolve(_this3._networks);
             });
           };
 
-          _this2._wifiControlScanListener = _this2._thunderjs.on('WifiControl', 'scanresults', function (data) {
+          _this3._wifiControlScanListener = _this3._thunderjs.on('WifiControl', 'scanresults', function (data) {
             _getWifiNetworks();
           });
 
-          _this2._thunderjs.call('WifiControl', 'scan');
+          _this3._thunderjs.call('WifiControl', 'scan');
 
-          setTimeout(_getWifiNetworks.bind(_this2), 2000);
+          setTimeout(_getWifiNetworks.bind(_this3), 2000);
+        });
+      }
+    }, {
+      key: "scanAndConnect",
+      value: function scanAndConnect(ssid, password, type) {
+        var _this4 = this;
+
+        return new Promise(function (resolve, reject) {
+          _this4.networks().then(function (networks) {
+            if (_this4.getNetwork(ssid) === undefined) reject('Network does not exist');
+          }).then(_this4.connect(ssid, password, type)).then(resolve());
         });
       }
     }, {
       key: "connect",
-      value: function connect(ssid, password) {
-        var _this3 = this;
+      value: function connect(ssid, password, type) {
+        var _this5 = this;
 
-        return new Promise(function (resolve, reject) {
-          console.log("Connecting to ".concat(ssid));
+        console.log("Connecting to ".concat(ssid, " with psk: ").concat(password, " and type ").concat(type));
+        if (this._wifiConnectionListener) this._wifiControlScanListener.dispose(this._wifiConnectionListener);
+        return this._thunderjs.call('WifiControl', "config@".concat(ssid), {
+          ssid: ssid,
+          accesspoint: false,
+          psk: password,
+          type: type
+        }).then(function () {
+          _this5._wifiConnectionListener = _this5._thunderjs.on('WifiControl', 'connectionchange', function () {
+            console.log('Succesfully connected to wifi, storing configuration');
 
-          var network = _this3._networks.filter(function (n) {
-            if (n.ssid === ssid) return true;
-          })[0];
+            _this5._thunderjs.call('WifiControl', 'store');
 
-          var type;
-          if (network.pairs[0].method === 'WPA2' || network.pairs[0].method === 'WPA') type = 'WPA';else if (network.pairs[0].method === 'WEP') type = 'Unknown';else if (network.pairs[0].method === 'ESS') type = 'Unsecure';else type = 'Unkown';
-          if (_this3._wifiConnectionListener) _this3._wifiControlScanListener.dispose(_this3._wifiConnectionListener);
-          return _this3._thunderjs.call('WifiControl', "config@".concat(ssid), {
-            ssid: ssid,
-            accesspoint: false,
-            psk: password,
-            type: type
-          }).then(function () {
-            _this3._wifiConnectionListener = _this3._thunderjs.on('WifiControl', 'connectionchange', function () {
-              console.log("Succesfully connected to wifi, getting IP");
+            console.log('Getting IP on wlan0'); // FIXME - we should be able to handle more then wlan0
 
-              _this3._thunderjs.call('NetworkControl', 'request', {
-                device: 'wlan0'
-              });
+            _this5._thunderjs.call('NetworkControl', 'request', {
+              device: 'wlan0'
             });
+          });
 
-            _this3._thunderjs.call('WifiControl', 'connect', {
-              ssid: ssid
-            });
+          _this5._thunderjs.call('WifiControl', 'connect', {
+            ssid: ssid
           });
         });
       }
@@ -1038,11 +1073,14 @@ var appBundle = function () {
   }();
 
   var CONNECTION_TIMEOUT = 15000;
+  var WIFI_CONNECTION_TIMEOUT = 30000;
 
   var WPE =
   /*#__PURE__*/
   function () {
     function WPE(host, port, stage) {
+      var _this6 = this;
+
       _classCallCheck(this, WPE);
 
       var config = {
@@ -1051,40 +1089,37 @@ var appBundle = function () {
       };
       this._wifi = new Wifi(config);
       this._stage = stage;
-      this._baseBootmanagerUrl = 'http://bootmanager.metrological.com/rdk/landingpage';
+      this._baseBootmanagerUrl = 'http://bootmanager.metrological.com';
+      this._landingBaseBootPageDefault = 'rdk/landingpage';
       this.STATES = {
         NOIP: 1,
         HASIP: 2,
-        HASINTERNET: 3
+        HASTIME: 3,
+        HASINTERNET: 4
       };
       this._state = this.STATES.NOIP;
       this._thunderjs = new ThunderJS(config);
 
-      this._thunderjs.on('Controller', 'statechange', this._onMessage.bind(this));
+      this._thunderjs.on('Controller', 'all', this._onMessage.bind(this));
+
+      this._deviceId = undefined;
+
+      this._thunderjs.call('DeviceInfo', 'systeminfo').then(function (systeminfo) {
+        _this6._deviceId = systeminfo.deviceid;
+      });
     }
 
     _createClass(WPE, [{
-      key: "connectWifi",
-      value: function connectWifi(ssid, passwd) {
-        var _this4 = this;
-
-        this._updateUIState('ConnectingToNetwork', ssid);
-
-        this._wifi.connect(ssid, passwd).then(function () {
-          setTimeout(_this4._noConnectionAfterTime.bind(_this4), CONNECTION_TIMEOUT);
-
-          _this4._checkForIP();
-        });
-      }
-    }, {
       key: "init",
       value: function init() {
-        var _this5 = this;
+        var _this7 = this;
 
         console.log('init');
+        /*
         this._uxPlugin = undefined;
         this._wifiPlugin = undefined;
-        this._state = this.STATES.NOIP; // check if we have a wifi or ux plugin
+        this._state = this.STATES.NOIP;
+        */
 
         this._thunderjs.call('Controller', 'status').then(function (_plugins) {
           for (var i = 0; i < _plugins.length; i++) {
@@ -1092,102 +1127,190 @@ var appBundle = function () {
 
             if (_p.callsign === 'UX') {
               console.log('Found UX plugin');
-              _this5._uxPlugin = _p;
+              _this7._uxPlugin = _p;
             }
 
             if (_p.callsign === 'WifiControl') {
               console.log('Found WifiControl plugin');
-              _this5._wifiPlugin = _p;
+              _this7._wifiPlugin = _p;
             }
           }
         });
 
-        this._checkForIP();
-
+        this.check();
         setTimeout(this._noConnectionAfterTime.bind(this), CONNECTION_TIMEOUT);
       }
+      /*
+       * Failure handlers
+       */
+
     }, {
       key: "_noConnectionAfterTime",
       value: function _noConnectionAfterTime() {
-        var _this6 = this;
-
         console.log('_noConnectionAfterTime');
 
-        if (this._state !== this.STATES.HASINTERNET) {
-          if (this._wifiPlugin === undefined) {
-            this._updateUIState('NoConnection');
-          } else {
-            this._updateUIState('ScanningForNetworks');
-
-            this._wifi.networks().then(function (networks) {
-              _this6._updateUIState('WifiLocations', networks);
-            });
-          }
+        if (this._state === this.STATES.NOIP) {
+          if (this._wifiPlugin === undefined) this._updateUIState('NoConnection');else this._checkAvailableWifiConfigs();
         }
       }
     }, {
-      key: "_checkForIP",
-      value: function _checkForIP() {
-        var _this7 = this;
+      key: "_noWiFiConnectionAfterTime",
+      value: function _noWiFiConnectionAfterTime() {
+        var _this8 = this;
 
-        console.log('_checkForIP');
+        console.log('_noWiFiConnectionAfterTime');
 
-        this._thunderjs.call('Controller', 'status@TimeSync').then(function (res) {
-          if (res && Array.isArray(res) && res[0] && res[0].state === "activated") {
-            _this7._state = _this7.STATES.HASIP;
-            console.log('_checkForIP HASIP');
+        if (this._state !== this.STATES.HASINTERNET) {
+          this._updateUIState('WifiConnectError'); // delete the config and render wifi list
 
-            _this7._initState();
 
-            _this7._checkForInternet();
+          this._wifi.deleteConfigs().then(function () {
+            _this8._wifi.networks().then(function (networks) {
+              _this8._wifiNetworks = networks;
+
+              _this8._updateUIState('WifiLocations', networks);
+            });
+          });
+        }
+      }
+      /*
+       * WIFI
+       */
+
+    }, {
+      key: "_checkAvailableWifiConfigs",
+      value: function _checkAvailableWifiConfigs() {
+        var _this9 = this;
+
+        console.log('_checkAvailableWifiConfigs');
+
+        this._wifi.configs().then(function (configs) {
+          console.log('_checkAvailableWifiConfigs configs:', configs);
+
+          if (configs.length === 0) {
+            // no wifi configs found, scan and show UI
+            console.log('_checkAvailableWifiConfigs no configs found, scanning');
+
+            _this9._updateUIState('ScanningForNetworks');
+
+            _this9._wifi.networks().then(function (networks) {
+              _this9._updateUIState('WifiLocations', networks);
+            });
+          } else {
+            // connect to config[0]
+            console.log('_checkAvailableWifiConfigs found config, connecting');
+
+            _this9._updateUIState('ConnectingToNetwork', configs[0].ssid);
+
+            setTimeout(_this9._noWiFiConnectionAfterTime.bind(_this9), WIFI_CONNECTION_TIMEOUT);
+
+            _this9._wifi.scanAndConnect(configs[0].ssid, configs[0].psk, configs[0].type).then(function () {
+              _this9.check();
+            })["catch"](function (e) {
+              _this9._updateUIState('WifiConnectError');
+            });
           }
-        })["catch"](function (e) {
-          console.error('Error', e);
+        });
+      }
+    }, {
+      key: "connectWifi",
+      value: function connectWifi(ssid, passwd) {
+        var _this10 = this;
+
+        this._updateUIState('ConnectingToNetwork', ssid);
+
+        var network = this._wifi.getNetwork(ssid);
+
+        setTimeout(this._noWiFiConnectionAfterTime.bind(this), WIFI_CONNECTION_TIMEOUT);
+
+        this._wifi.connect(network.name, passwd, network.type).then(function () {
+          _this10.check();
+        });
+      }
+      /*
+       * Checkers
+       */
+
+    }, {
+      key: "check",
+      value: function check() {
+        var _this11 = this;
+
+        // stagger checks, to make sure were not checking too much in parallel
+        if (this._checkInProgress === true) return setTimeout(this.check.bind(this), 5000);
+        console.log('check');
+        this._checkInProgress = true;
+
+        this._checkIPAddress().then(this._checkForTime.bind(this)).then(this._checkForInternet.bind(this)).then(function () {
+          console.log('check state:', _this11._state);
+
+          if (_this11._state >= _this11.STATES.HASTIME) {
+            _this11._getBootmanagerUrl().then(function (data) {
+              _this11._updateUIState('Ready');
+
+              if (data.url && _this11._uxPlugin === undefined) // we dont seem to have a ux plugin, redirect the current window instead
+                _this11._updateUIState('GoToURL', data);else if (data.url) _this11._launchUx(data.url);
+            })["catch"](function (err) {
+              console.error(err);
+            });
+          } else {
+            _this11._checkInProgress = false;
+          }
+        })["catch"](function (err) {
+          _this11._checkInProgress = false;
+          console.error('Error', err);
+
+          _this11._updateUIState('NoConnection');
+        });
+      }
+    }, {
+      key: "_checkIPAddress",
+      value: function _checkIPAddress() {
+        var _this12 = this;
+
+        console.log('_checkIPAddress');
+        return this._thunderjs.DeviceInfo.addresses().then(function (data) {
+          console.log('_parseNetworks', data);
+          var ipList = data.filter(function (d) {
+            if (d.name === 'lo' || d.ip === undefined || d.ip.length < 1) return false;else return true;
+          }).map(function (d) {
+            return d.ip[0];
+          });
+
+          if (ipList.length > 0) {
+            _this12._updateUIState('HasLocalNetwork', ipList.toString());
+
+            _this12._state = _this12.STATES.HASIP;
+          }
+        });
+      }
+    }, {
+      key: "_checkForTime",
+      value: function _checkForTime() {
+        var _this13 = this;
+
+        console.log('_checkForTime');
+        return this._thunderjs.call('Controller', 'status@TimeSync').then(function (res) {
+          if (res && Array.isArray(res) && res[0] && res[0].state === "activated") {
+            _this13._state = _this13.STATES.HASTIME;
+            console.log('_checkForTime HASTIME');
+          }
         });
       }
     }, {
       key: "_checkForInternet",
       value: function _checkForInternet() {
-        var _this8 = this;
+        var _this14 = this;
 
+        // hack to avoid calling to location sync without time, this for somehow crashed my system
+        if (this._state < this.STATES.HASTIME) return Promise.resolve();
         console.log('_checkForInternet');
-
-        this._thunderjs.call('LocationSync', 'location').then(function (res) {
+        return this._thunderjs.call('LocationSync', 'location').then(function (res) {
           if (res.publicip !== undefined && res.publicip !== '') {
-            _this8._state = _this8.STATES.HASINTERNET;
+            _this14._state = _this14.STATES.HASINTERNET;
             console.log('_checkForInternet HASINTERNET');
-
-            _this8._initState();
           }
-        })["catch"](function (e) {
-          console.error('Error', e);
         });
-      }
-    }, {
-      key: "_onMessage",
-      value: function _onMessage(notification) {
-        if (!notification) return;
-        if (notification.callsign === 'LocationSync' && notification.state === 'Activated') this._checkForIP();
-        if (notification.callsign === 'TimeSync' && notification.state === 'Activated') setTimeout(this._checkForInternet.bind(this), 5000);
-        if (notification.callsign === 'NetworkControl') this._checkForIP();
-      }
-    }, {
-      key: "_initState",
-      value: function _initState() {
-        var _this9 = this;
-
-        console.log('_initState state:', this._state);
-        if (this._state === this.STATES.NOIP) return;
-        if (this._state >= this.STATES.HASIP) this._getIPAddress();
-
-        if (this._state === this.STATES.HASINTERNET) {
-          this._getBootmanagerUrl().then(function (data) {
-            if (_this9._uxPlugin === undefined) // we dont seem to have a ux plugin, redirect the current window instead
-              _this9._updateUIState('GoToURL', data);else _this9._launchUx(data.url);
-          })["catch"](function (err) {
-            console.error(err);
-          });
-        }
       }
     }, {
       key: "_updateUIState",
@@ -1198,16 +1321,59 @@ var appBundle = function () {
           data: data
         }]);
       }
+      /*
+       * Notifications
+       */
+
+    }, {
+      key: "_onMessage",
+      value: function _onMessage(notification) {
+        console.log('_onMessage', notification);
+        if (!notification) return;
+
+        var _state;
+
+        if (notification.data !== undefined) _state = notification.data.state;
+        if (notification.callsign === 'LocationSync') this.check();
+        if (notification.callsign === 'TimeSync') this.check();
+        if (notification.callsign === 'NetworkControl') this.check();
+      }
+      /*
+       * Final stage handlers
+       */
+
     }, {
       key: "_getBootmanagerUrl",
       value: function _getBootmanagerUrl(info) {
+        var _this15 = this;
+
         var url = this._baseBootmanagerUrl;
-        return this._xhr('GET', url);
+        console.log('_getBootmanagerUrl');
+        return this._getConfig().then(function (config) {
+          console.log('_getBootmanagerUrl config & deviceId', config, _this15._deviceId);
+
+          var _encodedDeviceId = encodeURIComponent(_this15._deviceId);
+
+          if (config !== undefined && config.url !== undefined) {
+            console.log('_getBootmanagerUrl by url', config.url);
+            return _this15._xhr('GET', "".concat(config.url, "/").concat(_encodedDeviceId));
+          } else if (config !== undefined && config.operator !== undefined) {
+            console.log('_getBootmanagerUrl by operator', config.operator);
+            return _this15._xhr('GET', "".concat(_this15._baseBootmanagerUrl, "/").concat(config.operator, "/").concat(_encodedDeviceId));
+          } else {
+            console.log('_getBootmanagerUrl default', _this15._landingBaseBootPageDefault);
+            return _this15._xhr('GET', "".concat(_this15._baseBootmanagerUrl, "/").concat(_this15._landingBaseBootPageDefault));
+          }
+        })["catch"](function (e) {
+          console.error('_getBootmanagerUrl error', e);
+          console.log('_getBootmanagerUrl fallback to default', _this15._landingBaseBootPageDefault);
+          return _this15._xhr('GET', "".concat(_this15._baseBootmanagerUrl, "/").concat(_this15._landingBaseBootPageDefault));
+        });
       }
     }, {
       key: "_launchUx",
       value: function _launchUx(url) {
-        var _this10 = this;
+        var _this16 = this;
 
         //using all for now, individual states on UX through thunderjs didnt seem to work
         console.log('_launchUx', url);
@@ -1217,15 +1383,15 @@ var appBundle = function () {
 
           var _data = data.data ? data.data : {};
 
-          if (_data.state === 'activated') _this10._thunderjs.call('UX', 'state', 'resumed');
-          if (_data.suspended === false) _this10._thunderjs.call('UX', 'url', url);
-          if (_data.url === url && _data.loaded) setTimeout(_this10._harakiri.bind(_this10), 5000);
+          if (_data.state === 'activated') _this16._thunderjs.call('UX', 'state', 'resumed');
+          if (_data.suspended === false) _this16._thunderjs.call('UX', 'url', url);
+          if (_data.url === url && _data.loaded) setTimeout(_this16._harakiri.bind(_this16), 5000);
         });
 
         if (this._uxPlugin.state === 'deactivated') this._thunderjs.call('Controller', 'activate', {
           'callsign': 'UX'
         });else if (this._uxPlugin.state === 'suspended') this._thunderjs.call('UX', 'state', 'resumed');else if (this._uxPlugin.state === 'resumed') this._thunderjs.call('UX', 'url').then(function (_url) {
-          if (_url === url) _this10._harakiri();else _this10._thunderjs.call('UX', 'url', url);
+          if (_url === url) _this16._harakiri();else _this16._thunderjs.call('UX', 'url', url);
         });
       }
     }, {
@@ -1237,32 +1403,14 @@ var appBundle = function () {
           'callsign': 'WebKitBrowser'
         });
       }
+      /*
+       * Utility
+       */
+
     }, {
-      key: "_getIPAddress",
-      value: function _getIPAddress() {
-        var _this11 = this;
-
-        console.log('_getIPAddress');
-
-        this._thunderjs.DeviceInfo.addresses().then(this._parseNetworks.bind(this))["catch"](function (err) {
-          _this11._updateUIState('NoConnection');
-        });
-      }
-    }, {
-      key: "_parseNetworks",
-      value: function _parseNetworks(data) {
-        console.log('_parseNetworks', data);
-        var ipList = data.filter(function (d) {
-          if (d.name === 'lo' || d.ip === undefined || d.ip.length < 1) return false;else return true;
-        }).map(function (d) {
-          return d.ip[0];
-        });
-
-        for (var i in data) {
-          if (data[i].name === 'eth0' || data[i].name === 'wlan0') {
-            this._updateUIState('HasLocalNetwork', ipList.toString());
-          }
-        }
+      key: "_getConfig",
+      value: function _getConfig() {
+        return this._xhr('GET', '/config.json');
       }
     }, {
       key: "_xhr",
@@ -1839,7 +1987,7 @@ var appBundle = function () {
     }, {
       key: "_update",
       value: function _update() {
-        var _this12 = this;
+        var _this17 = this;
 
         if (this._layout && this.keyboardTemplate.layouts[this._layout] === undefined) {
           console.error("Configured layout \"".concat(this.layout, "\" does not exist. Reverting to \"").concat(Object.keys(this.keyboardTemplate.layouts)[0], "\""));
@@ -1891,7 +2039,7 @@ var appBundle = function () {
                 x: prevOffset,
                 w: w,
                 h: h,
-                type: _this12.keyboardButton
+                type: _this17.keyboardButton
               };
             })
           };
@@ -2163,7 +2311,7 @@ var appBundle = function () {
     }, {
       key: "showLogin",
       value: function showLogin() {
-        var _this13 = this;
+        var _this18 = this;
 
         if (this.wifiName) this.tag('InputLabel').text.text = "WIFI Login:  ".concat(this.wifiName);
         this.tag('LoginKeyboard').value = '';
@@ -2171,7 +2319,7 @@ var appBundle = function () {
         this.hideAnimation.stop();
         this.showAnimation.start();
         this.showAnimation.on('finish', function () {
-          _this13._setState('LoginKeyboard');
+          _this18._setState('LoginKeyboard');
         });
       }
     }, {
@@ -2246,8 +2394,8 @@ var appBundle = function () {
       value: function _states() {
         return [
         /*#__PURE__*/
-        function (_this14) {
-          _inherits(LoginKeyboard, _this14);
+        function (_this19) {
+          _inherits(LoginKeyboard, _this19);
 
           function LoginKeyboard() {
             _classCallCheck(this, LoginKeyboard);
@@ -2285,8 +2433,8 @@ var appBundle = function () {
           return LoginKeyboard;
         }(this),
         /*#__PURE__*/
-        function (_this15) {
-          _inherits(LoginButton$$1, _this15);
+        function (_this20) {
+          _inherits(LoginButton$$1, _this20);
 
           function LoginButton$$1() {
             _classCallCheck(this, LoginButton$$1);
@@ -2337,7 +2485,7 @@ var appBundle = function () {
     _createClass(App, [{
       key: "_init",
       value: function _init() {
-        var _this16 = this;
+        var _this21 = this;
 
         //this._wpe = new WPE('192.168.11.101', 80, this);
         this._wpe = new WPE('127.0.0.1', 80, this);
@@ -2411,15 +2559,15 @@ var appBundle = function () {
           }]
         });
         setTimeout(function () {
-          _this16.tag('Overlay').visible = false;
+          _this21.tag('Overlay').visible = false;
 
-          _this16.startAnimation();
+          _this21.startAnimation();
         }, 2000);
         setTimeout(function () {
-          _this16._wpe.init();
+          _this21._wpe.init();
         }, 2500);
         setTimeout(function () {
-          if (_this16.tag('Message').message === undefined) _this16.tag('Message').message = 'Please wait...';
+          if (_this21.tag('Message').message === undefined) _this21.tag('Message').message = 'Please wait...';
         }, 7000);
       }
     }, {
@@ -2546,8 +2694,8 @@ var appBundle = function () {
       value: function _states() {
         return [
         /*#__PURE__*/
-        function (_this17) {
-          _inherits(HasLocalNetwork, _this17);
+        function (_this22) {
+          _inherits(HasLocalNetwork, _this22);
 
           function HasLocalNetwork() {
             _classCallCheck(this, HasLocalNetwork);
@@ -2566,28 +2714,8 @@ var appBundle = function () {
           return HasLocalNetwork;
         }(this),
         /*#__PURE__*/
-        function (_this18) {
-          _inherits(HasLocalNetwork, _this18);
-
-          function HasLocalNetwork() {
-            _classCallCheck(this, HasLocalNetwork);
-
-            return _possibleConstructorReturn(this, _getPrototypeOf(HasLocalNetwork).apply(this, arguments));
-          }
-
-          _createClass(HasLocalNetwork, [{
-            key: "$enter",
-            value: function $enter(state, _ref3) {
-              var data = _ref3.data;
-              this.tag('Message').message = "Connected; IP: ".concat(data);
-            }
-          }]);
-
-          return HasLocalNetwork;
-        }(this),
-        /*#__PURE__*/
-        function (_this19) {
-          _inherits(ConnectingToNetwork, _this19);
+        function (_this23) {
+          _inherits(ConnectingToNetwork, _this23);
 
           function ConnectingToNetwork() {
             _classCallCheck(this, ConnectingToNetwork);
@@ -2597,8 +2725,8 @@ var appBundle = function () {
 
           _createClass(ConnectingToNetwork, [{
             key: "$enter",
-            value: function $enter(state, _ref4) {
-              var data = _ref4.data;
+            value: function $enter(state, _ref3) {
+              var data = _ref3.data;
               this.tag('Message').message = "Connecting to: ".concat(data);
             }
           }]);
@@ -2606,8 +2734,8 @@ var appBundle = function () {
           return ConnectingToNetwork;
         }(this),
         /*#__PURE__*/
-        function (_this20) {
-          _inherits(ScanningForNetworks, _this20);
+        function (_this24) {
+          _inherits(ScanningForNetworks, _this24);
 
           function ScanningForNetworks() {
             _classCallCheck(this, ScanningForNetworks);
@@ -2618,15 +2746,72 @@ var appBundle = function () {
           _createClass(ScanningForNetworks, [{
             key: "$enter",
             value: function $enter(state) {
-              this.tag('Message').message = "Scanning for networks...";
+              this.tag('Message').message = 'Scanning for networks...';
             }
           }]);
 
           return ScanningForNetworks;
         }(this),
         /*#__PURE__*/
-        function (_this21) {
-          _inherits(GoToURL, _this21);
+        function (_this25) {
+          _inherits(ThunderError, _this25);
+
+          function ThunderError() {
+            _classCallCheck(this, ThunderError);
+
+            return _possibleConstructorReturn(this, _getPrototypeOf(ThunderError).apply(this, arguments));
+          }
+
+          _createClass(ThunderError, [{
+            key: "$enter",
+            value: function $enter(state) {
+              this.tag('Message').message = 'Error connecting to Thunder';
+            }
+          }]);
+
+          return ThunderError;
+        }(this),
+        /*#__PURE__*/
+        function (_this26) {
+          _inherits(WifiConnectError, _this26);
+
+          function WifiConnectError() {
+            _classCallCheck(this, WifiConnectError);
+
+            return _possibleConstructorReturn(this, _getPrototypeOf(WifiConnectError).apply(this, arguments));
+          }
+
+          _createClass(WifiConnectError, [{
+            key: "$enter",
+            value: function $enter(state) {
+              this.tag('Message').message = 'Error connecting to WiFi';
+            }
+          }]);
+
+          return WifiConnectError;
+        }(this),
+        /*#__PURE__*/
+        function (_this27) {
+          _inherits(Ready, _this27);
+
+          function Ready() {
+            _classCallCheck(this, Ready);
+
+            return _possibleConstructorReturn(this, _getPrototypeOf(Ready).apply(this, arguments));
+          }
+
+          _createClass(Ready, [{
+            key: "$enter",
+            value: function $enter(state) {
+              this.tag('Message').message = "We're ready!";
+            }
+          }]);
+
+          return Ready;
+        }(this),
+        /*#__PURE__*/
+        function (_this28) {
+          _inherits(GoToURL, _this28);
 
           function GoToURL() {
             _classCallCheck(this, GoToURL);
@@ -2636,16 +2821,16 @@ var appBundle = function () {
 
           _createClass(GoToURL, [{
             key: "$enter",
-            value: function $enter(state, _ref5) {
-              var _this22 = this;
+            value: function $enter(state, _ref4) {
+              var _this29 = this;
 
-              var data = _ref5.data;
+              var data = _ref4.data;
 
               if (this._globalAnimation.state === 4) {
                 this.goToUrl(data.url);
               } else {
                 this._globalAnimation.on('finish', function () {
-                  _this22.goToUrl(data.url);
+                  _this29.goToUrl(data.url);
                 });
               }
             }
@@ -2654,8 +2839,8 @@ var appBundle = function () {
           return GoToURL;
         }(this),
         /*#__PURE__*/
-        function (_this23) {
-          _inherits(NoConnection, _this23);
+        function (_this30) {
+          _inherits(NoConnection, _this30);
 
           function NoConnection() {
             _classCallCheck(this, NoConnection);
@@ -2667,16 +2852,14 @@ var appBundle = function () {
             key: "$enter",
             value: function $enter() {
               this.tag('Message').message = 'No valid internet connection';
-
-              this._setState('WifiLocations');
             }
           }]);
 
           return NoConnection;
         }(this),
         /*#__PURE__*/
-        function (_this24) {
-          _inherits(WifiLocations, _this24);
+        function (_this31) {
+          _inherits(WifiLocations, _this31);
 
           function WifiLocations() {
             _classCallCheck(this, WifiLocations);
@@ -2686,8 +2869,8 @@ var appBundle = function () {
 
           _createClass(WifiLocations, [{
             key: "$enter",
-            value: function $enter(state, _ref6) {
-              var data = _ref6.data;
+            value: function $enter(state, _ref5) {
+              var data = _ref5.data;
               this.tag('WifiList').items = data;
               this.tag('WifiList').visible = true;
 
@@ -2703,8 +2886,8 @@ var appBundle = function () {
             value: function _states() {
               return [
               /*#__PURE__*/
-              function (_this25) {
-                _inherits(LoadLocations, _this25);
+              function (_this32) {
+                _inherits(LoadLocations, _this32);
 
                 function LoadLocations() {
                   _classCallCheck(this, LoadLocations);
@@ -2722,8 +2905,8 @@ var appBundle = function () {
                 return LoadLocations;
               }(this),
               /*#__PURE__*/
-              function (_this26) {
-                _inherits(Ready, _this26);
+              function (_this33) {
+                _inherits(Ready, _this33);
 
                 function Ready() {
                   _classCallCheck(this, Ready);
@@ -2736,8 +2919,8 @@ var appBundle = function () {
                   value: function $enter() {}
                 }, {
                   key: "$onWifiItemSelect",
-                  value: function $onWifiItemSelect(_ref7) {
-                    var item = _ref7.item;
+                  value: function $onWifiItemSelect(_ref6) {
+                    var item = _ref6.item;
                     console.log('$onWifiItemSelect :', item);
                     this.selectedWifiName = item.name;
 
@@ -2753,8 +2936,8 @@ var appBundle = function () {
                 return Ready;
               }(this),
               /*#__PURE__*/
-              function (_this27) {
-                _inherits(WifiLoginScreen, _this27);
+              function (_this34) {
+                _inherits(WifiLoginScreen, _this34);
 
                 function WifiLoginScreen() {
                   _classCallCheck(this, WifiLoginScreen);
