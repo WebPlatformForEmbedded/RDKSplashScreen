@@ -2669,6 +2669,11 @@ var appBundle = function () {
             y: 60,
             type: Message
           },
+          IpAddress: {
+            x: 1640,
+            y: 60,
+            type: Message
+          },
           WifiList: {
             x: 100,
             y: 100,
@@ -2707,7 +2712,8 @@ var appBundle = function () {
             key: "$enter",
             value: function $enter(state, _ref2) {
               var data = _ref2.data;
-              this.tag('Message').message = "Connected; IP: ".concat(data);
+              this.tag('Message').message = "Connected!";
+              this.tag('IpAddress').message = "IP: ".concat(data);
             }
           }]);
 
